@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
-  { path: '/login', name: 'Login', component: () => import('../views/Login.vue') },
+  { path: '/login', name: 'Login', component: () => import('../views/Login.vue'), meta: { noAuth: true } },
   { path: '/', name: 'Home', component: () => import('../views/Home.vue') },
   { path: '/companies', name: 'Companies', component: () => import('../views/Companies.vue') },
   { path: '/companies/:id', name: 'CompanyDetail', component: () => import('../views/CompanyDetail.vue') },
@@ -31,4 +31,17 @@ const routes = [
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
+
+// Auth guard — redirect to login if no token
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token')
+  if (to.meta.noAuth) {
+    // Already logged in? Redirect to home
+    if (token) return next('/')
+    return next()
+  }
+  if (!token) return next('/login')
+  next()
+})
+
 export default router
