@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+exports/*.pdf
+exports/*.zip
+exports/*.xlsx
+invoices/*.pdf
+wht-certificates/*.pdf
+wht-certificates/*.zip
+.DS_Store
