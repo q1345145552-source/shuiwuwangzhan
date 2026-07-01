@@ -2,13 +2,9 @@ const jwt = require('jsonwebtoken');
 
 const authMiddleware = (req, res, next) => {
   if (process.env.SKIP_AUTH === "true") return next();
+
   // 跳过登录接口和健康检查
   if (req.path === '/api/auth/login' || req.path === '/api/health') {
-    return next();
-  }
-
-  // 跳过静态资源
-  if (req.path.startsWith('/invoices') || req.path.startsWith('/wht-certificates') || req.path.startsWith('/exports')) {
     return next();
   }
 

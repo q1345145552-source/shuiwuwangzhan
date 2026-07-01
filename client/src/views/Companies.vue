@@ -209,7 +209,11 @@ async function deleteCompany(row) {
     await ElMessageBox.confirm(`确定删除 "${row.name}"？`, '确认删除', { type: 'warning' })
     await api.delete('/companies/' + row.id)
     ElMessage.success('已删除'); loadList()
-  } catch(e) {}
+  } catch(e) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error(e?.response?.data?.error || '删除失败')
+    }
+  }
 }
 
 async function seedAccounts(row) {

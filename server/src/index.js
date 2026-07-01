@@ -43,10 +43,6 @@ app.use(cors({
     credentials: true
 }));app.use(express.json());
 
-// 静态资源（不走 JWT）
-app.use('/invoices', express.static(path.join(__dirname, '..', 'invoices')));
-app.use('/wht-certificates', express.static(path.join(__dirname, '..', 'wht-certificates')));
-app.use('/exports', express.static(path.join(__dirname, '..', 'exports')));
 
 // 健康检查 & 登录（不走 JWT）
 app.get('/api/health', (req, res) => { res.json({ status: 'ok' }); });
@@ -55,6 +51,11 @@ app.use('/api/auth', authRouter);
 // ===== JWT 认证中间件 =====
 app.use(authMiddleware);
 
+// 静态资源（需登录鉴权）
+app.use('/invoices', authMiddleware, express.static(path.join(__dirname, '..', 'invoices')));
+app.use('/wht-certificates', authMiddleware, express.static(path.join(__dirname, '..', 'wht-certificates')));
+app.use('/exports', authMiddleware, express.static(path.join(__dirname, '..', 'exports')));
+app.use('/audit-reports', authMiddleware, express.static(path.join(__dirname, '..', 'audit-reports')));
 // API 路由
 app.use('/api/companies', companiesRouter);
 app.use('/api/accounts', accountsRouter);

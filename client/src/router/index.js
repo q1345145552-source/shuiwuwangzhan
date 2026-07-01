@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 const routes = [
-  { path: '/login', name: 'Login', component: () => import('../views/Login.vue'), meta: { noAuth: true } },
+  { path: '/login', name: 'Login', component: () => import('../views/Login.vue') },
   { path: '/', name: 'Home', component: () => import('../views/Home.vue') },
   { path: '/companies', name: 'Companies', component: () => import('../views/Companies.vue') },
   { path: '/companies/:id', name: 'CompanyDetail', component: () => import('../views/CompanyDetail.vue') },
@@ -32,15 +33,21 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory(), routes })
 
-// Auth guard — redirect to login if no token
+// 路由守卫：未登录 → 跳转登录页
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
-  if (to.meta.noAuth) {
-    // Already logged in? Redirect to home
+
+  if (to.path === '/login') {
+    // 已登录则直接进首页
     if (token) return next('/')
     return next()
   }
-  if (!token) return next('/login')
+
+  if (!token) {
+    ElMessage.warning('请先登录')
+    return next('/login')
+  }
+
   next()
 })
 

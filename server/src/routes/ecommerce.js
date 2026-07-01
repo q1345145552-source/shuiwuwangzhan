@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { checkPeriodLock } = require('../middleware/period-lock');
 const { validate, ecommerceSaleSchema } = require('../middleware/validator');
 const { logAudit } = require('../middleware/audit');
+const { VAT_RATE } = require('../constants');
 
 // POST /api/ecommerce/sales - Save/update ecommerce sales data
 router.post('/sales', checkPeriodLock, validate(ecommerceSaleSchema), async (req, res, next) => {
@@ -39,12 +40,12 @@ router.post('/sales', checkPeriodLock, validate(ecommerceSaleSchema), async (req
     // Auto-calculate VAT
     const s = result.rows[0];
     // Recalculate note
-    const netSales = (parseFloat(s.platform_sales) - parseFloat(s.platform_refunds)) / 1.07;
-    const vatSales = Math.round(netSales * 7) / 100;
+    const netSales = (parseFloat(s.platform_sales) - parseFloat(s.platform_refunds))  / (1 + VAT_RATE);
+    const vatSales = Math.round(netSales * VAT_RATE * 100) / 100;
 
     // Input VAT from deductible expenses: platform_fees + advertising + shipping + cogs (with VAT)
     const deductibleExpenses = parseFloat(s.platform_fees) + parseFloat(s.advertising_fees) + parseFloat(s.shipping_fees) + parseFloat(s.cost_of_goods);
-    const vatPurchases = Math.round((deductibleExpenses / 1.07 * 0.07 + parseFloat(s.import_vat_paid)) * 100) / 100;
+    const vatPurchases = Math.round((deductibleExpenses  / (1 + VAT_RATE) * VAT_RATE + parseFloat(s.import_vat_paid)) * 100) / 100;
 
     const updated = await pool.query(
       `UPDATE ecommerce_sales SET vat_sales_calculated = $1, vat_purchases_calculated = $2 WHERE id = $3 RETURNING *`,
@@ -75,11 +76,11 @@ router.post('/calculate-vat', async (req, res, next) => {
   try {
     const { company_id, period_id, platform_sales, platform_refunds, platform_fees, advertising_fees, shipping_fees, cost_of_goods, import_vat_paid } = req.body;
 
-    const netSales = (parseFloat(platform_sales || 0) - parseFloat(platform_refunds || 0)) / 1.07;
-    const vatSales = Math.round(netSales * 7) / 100;
+    const netSales = (parseFloat(platform_sales || 0) - parseFloat(platform_refunds || 0))  / (1 + VAT_RATE);
+    const vatSales = Math.round(netSales * VAT_RATE * 100) / 100;
 
     const deductible = parseFloat(platform_fees || 0) + parseFloat(advertising_fees || 0) + parseFloat(shipping_fees || 0) + parseFloat(cost_of_goods || 0);
-    const vatPurchases = Math.round((deductible / 1.07 * 0.07 + parseFloat(import_vat_paid || 0)) * 100) / 100;
+    const vatPurchases = Math.round((deductible  / (1 + VAT_RATE) * VAT_RATE + parseFloat(import_vat_paid || 0)) * 100) / 100;
 
     res.json({
       net_sales_ex_vat: Math.round(netSales * 100) / 100,
@@ -112,7 +113,7 @@ router.post('/compliance', async (req, res, next) => {
     let overdueStarted = false;
     for (let i = 0; i < monthly_sales.length; i++) {
       const m = monthly_sales[i];
-      cumulativeRevenue += (parseFloat(m.platform_sales || 0) - parseFloat(m.platform_refunds || 0)) / 1.07;
+      cumulativeRevenue += (parseFloat(m.platform_sales || 0) - parseFloat(m.platform_refunds || 0))  / (1 + VAT_RATE);
       if (cumulativeRevenue > THRESHOLD && !vat_registered && !overdueStarted) {
         overdueStarted = true;
       }
@@ -121,7 +122,7 @@ router.post('/compliance', async (req, res, next) => {
 
     // Estimate VAT owed (7% on revenue since threshold exceeded)
     const excessRevenue = Math.max(0, cumulativeRevenue - THRESHOLD);
-    const estimatedVatOwed = Math.round(excessRevenue * 7) / 100;
+    const estimatedVatOwed = Math.round(excessRevenue * VAT_RATE * 100) / 100;
 
     // Surcharge: 0.05% per day ≈ 1.5% per month
     const estimatedSurcharge = Math.round(estimatedVatOwed * monthsOverdue * 1.5) / 100;

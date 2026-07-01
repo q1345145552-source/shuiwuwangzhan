@@ -10,8 +10,8 @@ const pool = new Pool({
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-  process.exit(-1);
+  console.error('数据库连接池异常:', err.message);
+  // 不退出进程，连接池会自动重连
 });
 
 module.exports = { pool };

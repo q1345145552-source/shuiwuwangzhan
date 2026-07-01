@@ -39,7 +39,7 @@
           <el-menu-item index="/backup"><el-icon><FolderOpened /></el-icon> 数据备份</el-menu-item>
         </el-menu>
         <div class="user-footer">
-          <span class="user-name">管理员（测试模式）</span>
+          <span class="user-name">{{ userDisplayName }}</span>
         </div>
       </el-aside>
       <el-container>
@@ -85,6 +85,9 @@ import CompanySwitcher from './components/CompanySwitcher.vue'
 
 const route = useRoute()
 const store = useCompanyStore()
+const userDisplayName = computed(() => {
+  try { return JSON.parse(localStorage.getItem('user'))?.name || '管理员' } catch { return '管理员' }
+})
 
 // ----- Notification bell -----
 const alerts = ref([])

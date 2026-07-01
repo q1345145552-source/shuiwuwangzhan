@@ -12,7 +12,11 @@ router.post('/login', async (req, res, next) => {
     }
 
     const validUsername = process.env.AUTH_USERNAME || 'admin';
-    const validPassword = process.env.AUTH_PASSWORD || 'thai2026';
+    const validPassword = process.env.AUTH_PASSWORD;
+    if (!validPassword) {
+      console.error('❌ 错误：.env 中未配置 AUTH_PASSWORD，系统无法处理登录');
+      return res.status(500).json({ error: '服务器配置错误' });
+    }
 
     if (username !== validUsername) {
       return res.status(401).json({ error: '用户名或密码错误' });

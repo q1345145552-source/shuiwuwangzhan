@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { VAT_RATE } = require('../constants');
 
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
@@ -8,35 +9,39 @@ const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 function calculatePenalty(amountDue, dueDate, currentDate) {
   const due = new Date(dueDate);
   const now = currentDate ? new Date(currentDate) : new Date();
-  let days = Math.floor((now - due) / (1000 * 60 * 60 * 24));
+  const days = Math.floor((now - due) / (1000 * 60 * 60 * 24));
   if (days <= 0) return { overdue_days: 0, penalty: 0 };
 
-  let months = Math.floor(days / 30);
-  let remainingDays = days % 30;
-  let penalty = amountDue;
-
-  for (let i = 0; i < months; i++) {
-    penalty = penalty * (1 + 0.0005 * 30);
-  }
-  penalty = penalty * (1 + 0.0005 * remainingDays);
+  // 泰国税法：每日 0.05%，单利
+  const dailyRate = 0.0005;
+  const penalty = amountDue * dailyRate * days;
 
   return {
     overdue_days: days,
-    penalty: r2(penalty - amountDue)
+    penalty: r2(penalty)
   };
 }
 
 // 纳税截止日规则
+// month: 1-12 (报告期间月份), 返回次月的截止日期
 function getDueDate(taxType, year, month) {
+  // 计算次月（截止日在报告期次月）
+  let dueMonth = month + 1;
+  let dueYear = year;
+  if (dueMonth > 12) { dueMonth = 1; dueYear = year + 1; }
+  // JS Date: month 0-based (0=Jan)
+  // 使用 UTC 避免时区偏移（Bangkok UTC+7）
+  const d = (day) => new Date(Date.UTC(dueYear, dueMonth - 1, day));
+
   switch (taxType) {
-    case 'vat': return new Date(year, month, 23); // 次月23日
+    case 'vat': return d(23);             // 次月23日
     case 'wht_pnd53':
     case 'wht_pnd54':
-    case 'wht_pnd1': return new Date(year, month, 7); // 次月7日
-    case 'social_security': return new Date(year, month, 15); // 次月15日
-    case 'cit_pnd50': return new Date(year + 1, 4, 30); // 年度结束后150天 ≈ 次年5月30
-    case 'cit_pnd51': return new Date(year, 7, 30); // 半年结束后60天 ≈ 8月30
-    default: return new Date(year, month, 15);
+    case 'wht_pnd1': return d(7);         // 次月7日
+    case 'social_security': return d(15); // 次月15日
+    case 'cit_pnd50': return new Date(year + 1, 4, 30); // CIT 次年5月30日, 不受 month 影响
+    case 'cit_pnd51': return new Date(year, 7, 30);     // CIT 半年 8月30日
+    default: return d(15);
   }
 }
 
@@ -153,14 +158,14 @@ router.post('/calendar/generate', async (req, res, next) => {
       // VAT - P.P.30 每月
       entries.push({
         company_id, tax_type: 'vat', tax_name: 'VAT P.P.30',
-        due_date: getDueDate('vat', yr, mon + 1 > 11 ? yr + 1 : yr, (mon + 1) % 12),
+        due_date: getDueDate('vat', yr, mon + 1),
         period_year: yr, period_month: mon + 1
       });
 
       // PND.53 每月（如果可能有法人付款）
       entries.push({
         company_id, tax_type: 'wht_pnd53', tax_name: 'PND.53 法人预扣税',
-        due_date: getDueDate('wht_pnd53', yr, mon + 1 > 11 ? yr + 1 : yr, (mon + 1) % 12),
+        due_date: getDueDate('wht_pnd53', yr, mon + 1),
         period_year: yr, period_month: mon + 1
       });
 
@@ -168,7 +173,7 @@ router.post('/calendar/generate', async (req, res, next) => {
       if (settings.has_foreign_payment) {
         entries.push({
           company_id, tax_type: 'wht_pnd54', tax_name: 'PND.54 境外预扣税',
-          due_date: getDueDate('wht_pnd54', yr, mon + 1 > 11 ? yr + 1 : yr, (mon + 1) % 12),
+          due_date: getDueDate('wht_pnd54', yr, mon + 1),
           period_year: yr, period_month: mon + 1
         });
       }
@@ -177,7 +182,7 @@ router.post('/calendar/generate', async (req, res, next) => {
       if (settings.has_employees) {
         entries.push({
           company_id, tax_type: 'wht_pnd1', tax_name: 'PND.1 工资预扣税',
-          due_date: getDueDate('wht_pnd1', yr, mon + 1 > 11 ? yr + 1 : yr, (mon + 1) % 12),
+          due_date: getDueDate('wht_pnd1', yr, mon + 1),
           period_year: yr, period_month: mon + 1
         });
       }
@@ -186,7 +191,7 @@ router.post('/calendar/generate', async (req, res, next) => {
       if (settings.has_employees) {
         entries.push({
           company_id, tax_type: 'social_security', tax_name: '社保缴纳',
-          due_date: getDueDate('social_security', yr, mon + 1 > 11 ? yr + 1 : yr, (mon + 1) % 12),
+          due_date: getDueDate('social_security', yr, mon + 1),
           period_year: yr, period_month: mon + 1
         });
       }
@@ -323,8 +328,8 @@ router.post('/tax-relief-plan', async (req, res, next) => {
       const salesInclVat = parseFloat(item.sales_incl_vat) || 0;
       const refunds = parseFloat(item.refunds) || 0;
       const netSalesInclVat = salesInclVat - refunds;
-      const salesExVat = netSalesInclVat / 1.07;
-      const vatDue = salesExVat * 0.07;
+      const salesExVat = netSalesInclVat  / (1 + VAT_RATE);
+      const vatDue = salesExVat * VAT_RATE;
 
       // 月度进项分配（按销售占比）
       const monthInputRatio = totalSales > 0 ? (salesInclVat / totalSales) : 0;

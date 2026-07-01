@@ -4,6 +4,7 @@ const multer = require('multer');
 const Papa = require('papaparse');
 const { pool } = require('../db');
 const { logAudit } = require('../middleware/audit');
+const { VAT_RATE } = require('../constants');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
@@ -198,7 +199,7 @@ router.post('/import', upload.single('file'), async (req, res, next) => {
 
         // Import as vat_output — then mark raw_order as matched
         if (import_as !== 'ecommerce_sales') {
-          const amountExVat = r2(totalAmount / 1.07);
+          const amountExVat = r2(totalAmount  / (1 + VAT_RATE));
           const vatAmount = r2(totalAmount - amountExVat);
           await pool.query(
             `INSERT INTO vat_output_details (company_id, period_id, invoice_date, customer_name, description, amount_ex_vat, vat_amount, total_amount, source)
@@ -335,7 +336,7 @@ router.post('/add-missing', async (req, res, next) => {
         const ord = await client.query('SELECT * FROM platform_raw_orders WHERE id=$1 AND matched_to_detail=FALSE', [rawId]);
         if (!ord.rows.length) continue;
         const o = ord.rows[0];
-        const amountExVat = r2(parseFloat(o.total_amount) / 1.07);
+        const amountExVat = r2(parseFloat(o.total_amount)  / (1 + VAT_RATE));
         const vatAmount = r2(parseFloat(o.total_amount) - amountExVat);
 
         await client.query(

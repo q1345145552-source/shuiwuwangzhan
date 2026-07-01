@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { VAT_RATE } = require('../constants');
 
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
@@ -14,7 +15,7 @@ router.get('/annual-data', async (req, res, next) => {
     // Aggregate from ecommerce_sales for all periods in the year
     const agg = await pool.query(
       `SELECT
-        COALESCE(SUM(platform_sales - platform_refunds), 0) / 1.07 as platform_revenue,
+        COALESCE(SUM(platform_sales - platform_refunds), 0)  / ${1 + VAT_RATE} as platform_revenue,
         COALESCE(SUM(other_income), 0) as other_revenue,
         COALESCE(SUM(cost_of_goods), 0) as cost_of_goods,
         COALESCE(SUM(platform_fees), 0) as platform_fees,
@@ -83,26 +84,56 @@ router.post('/calculate-tax', async (req, res, next) => {
 
     // Auto-determine rate if tax_rate is 'auto'
     if (!rate || tax_rate === 'auto') {
-      // Check SME status
       if (company_id) {
         const comp = await pool.query('SELECT * FROM companies WHERE id=$1', [company_id]);
-        // Default SME rates
-        if (profit <= 300000) rate = 0;
-        else if (profit <= 3000000) rate = 15;
-        else rate = 20;
+        const company = comp.rows[0] || {};
+
+        // 获取年度总收入用于 SME 判断（优先用 cit_reports 中的值，其次用 ecommerce_sales 汇总）
+        let totalRevenue = profit;
+        try {
+          const revResult = await pool.query(
+            'SELECT COALESCE(SUM((platform_sales - platform_refunds)  / (1 + VAT_RATE)), 0) as total FROM ecommerce_sales WHERE company_id = $1',
+            [company_id]
+          );
+          totalRevenue = parseFloat(revResult.rows[0]?.total) || profit;
+        } catch (e) { /* fallback to profit */ }
+
+        // SME 判断：注册资本 <= 500万 THB 且 年收入 <= 3000万 THB
+        const registeredCapital = parseFloat(company.registered_capital || 0);
+        const isSME = registeredCapital <= 5000000 && totalRevenue <= 30000000;
+
+        if (isSME) {
+          // 中小企业累进税率
+          if (profit <= 300000) rate = 0;
+          else if (profit <= 3000000) rate = 15;
+          else rate = 20;
+        } else {
+          // 非 SME 统一 20%
+          rate = 20;
+        }
       } else {
         rate = profit <= 300000 ? 0 : profit <= 3000000 ? 15 : 20;
       }
     }
 
     const taxableProfit = Math.max(0, profit);
-    let taxAmount = 0;
-    if (taxableProfit <= 300000) {
-      taxAmount = 0;
-    } else if (taxableProfit <= 3000000) {
-      taxAmount = r2((taxableProfit - 300000) * 0.15);
+    let taxAmount;
+
+    if (rate === 20 && taxableProfit > 3000000) {
+      // 非 SME: 统一 20%（实际系统按累进更常见，此处按用户输入税率）
+      taxAmount = r2(taxableProfit * 0.20);
+    } else if (rate === 20) {
+      // 利润未超 300 万的小企业仍按 20% 统一税率
+      taxAmount = r2(taxableProfit * 0.20);
     } else {
-      taxAmount = r2((3000000 - 300000) * 0.15 + (taxableProfit - 3000000) * 0.20);
+      // SME 累进税率
+      if (taxableProfit <= 300000) {
+        taxAmount = 0;
+      } else if (taxableProfit <= 3000000) {
+        taxAmount = r2((taxableProfit - 300000) * 0.15);
+      } else {
+        taxAmount = r2((3000000 - 300000) * 0.15 + (taxableProfit - 3000000) * 0.20);
+      }
     }
 
     const credit = r2(wht_credit || 0);

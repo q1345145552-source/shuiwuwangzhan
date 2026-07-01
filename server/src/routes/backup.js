@@ -58,8 +58,16 @@ router.post('/now', (req, res, next) => {
 // GET /api/backup/download/:filename
 router.get('/download/:filename', (req, res, next) => {
   try {
-    const filename = req.params.filename;
-    const filepath = path.join(BACKUP_DIR, filename);
+    const safeFilename = path.basename(req.params.filename);
+    const backupDir = path.resolve(BACKUP_DIR);
+    const filepath = path.resolve(path.join(backupDir, safeFilename));
+
+    // 防止路径穿越：确保文件在 backupDir 内
+    if (!filepath.startsWith(backupDir + path.sep)) {
+      console.warn('路径穿越尝试:', req.params.filename);
+      return res.status(403).json({ error: '拒绝访问' });
+    }
+
     if (!fs.existsSync(filepath)) {
       return res.status(404).json({ error: '文件不存在' });
     }

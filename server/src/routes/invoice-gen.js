@@ -5,6 +5,7 @@ const fs = require('fs');
 const PDFDocument = require('pdfkit');
 const { pool } = require('../db');
 const { registerThaiFont, getFont, getBoldFont, thaiDateStr } = require('../utils/pdf-utils');
+const { VAT_RATE } = require('../constants');
 
 const INVOICE_DIR = path.join(__dirname, '..', '..', 'invoices');
 
@@ -36,15 +37,13 @@ router.post('/invoice-generate', async (req, res, next) => {
 
     // 计算金额
     const totalExVat = items.reduce((s, item) => s + (parseFloat(item.amount) || parseFloat(item.qty) * parseFloat(item.price) || 0), 0);
-    const vatAmount = Math.round(totalExVat * 7) / 100;
+    const vatAmount = Math.round(totalExVat * VAT_RATE * 100) / 100;
     const totalIncVat = totalExVat + vatAmount;
 
-    // 生成发票号 IN-年月-序号
-    const count = await pool.query(
-      "SELECT COUNT(*) as cnt FROM invoices WHERE company_id = $1 AND period_id = $2 AND type = $3",
-      [company_id, period_id, type]
-    );
-    const seq = parseInt(count.rows[0].cnt) + 1;
+    // 生成发票号 IN-年月-序号（用数据库序列防并发重复）
+    await pool.query('CREATE SEQUENCE IF NOT EXISTS invoice_seq START 1 INCREMENT 1');
+    const seqResult = await pool.query("SELECT nextval('invoice_seq') AS next_no");
+    const seq = parseInt(seqResult.rows[0].next_no);
     const now = new Date();
     const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
     const invoiceNo = `IN-${ym}-${String(seq).padStart(3, '0')}`;

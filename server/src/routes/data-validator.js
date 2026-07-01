@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { VAT_RATE } = require('../constants');
 
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
@@ -27,8 +28,8 @@ router.post('/check-sales-vat', async (req, res, next) => {
         [company_id, m.id]
       );
       const s = sales.rows[0] || { platform_sales: 0, platform_refunds: 0 };
-      const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0)) / 1.07);
-      const vatExpected = r2(netSales * 0.07);
+      const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0))  / (1 + VAT_RATE));
+      const vatExpected = r2(netSales * VAT_RATE);
 
       // 从 vat_output_details 取已申报销项
       const vatRes = await pool.query(
@@ -201,8 +202,8 @@ router.post('/full-check', async (req, res, next) => {
       const sales = await pool.query(
         'SELECT platform_sales, platform_refunds FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2', [company_id, m.id]);
       const s = sales.rows[0] || { platform_sales: 0, platform_refunds: 0 };
-      const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0)) / 1.07);
-      const vatExpected = r2(netSales * 0.07);
+      const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0))  / (1 + VAT_RATE));
+      const vatExpected = r2(netSales * VAT_RATE);
       const vatRes = await pool.query(
         'SELECT COALESCE(SUM(vat_amount),0) as vr FROM vat_output_details WHERE company_id=$1 AND period_id=$2', [company_id, m.id]);
       const vatReported = r2(vatRes.rows[0].vr);

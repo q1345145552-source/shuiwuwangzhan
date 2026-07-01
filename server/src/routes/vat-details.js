@@ -6,6 +6,7 @@ const { pool } = require('../db');
 const { checkPeriodLock } = require('../middleware/period-lock');
 const { validate, vatOutputBatchSchema } = require('../middleware/validator');
 const { logAudit } = require('../middleware/audit');
+const { VAT_RATE } = require('../constants');
 const upload = multer({ dest: '/tmp/' });
 
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
@@ -56,7 +57,7 @@ router.post('/output/batch', checkPeriodLock, validate(vatOutputBatchSchema), as
     const inserted = [];
     for (const e of entries) {
       const ex = r2(e.amount_ex_vat);
-      const vat = r2(ex * 0.07);
+      const vat = r2(ex * VAT_RATE);
       const tot = r2(ex + vat);
       const r = await client.query(
         `INSERT INTO vat_output_details (company_id,period_id,invoice_date,invoice_no,customer_name,customer_tax_id,description,amount_ex_vat,vat_amount,total_amount,source)
@@ -97,7 +98,7 @@ router.post('/output/import-csv', checkPeriodLock, upload.single('file'), async 
       let ok = 0;
       for (const r of rows) {
         if (!r.invoice_date || !r.amount_ex_vat) continue;
-        const ex = r2(r.amount_ex_vat), vat = r2(ex * 0.07), tot = r2(ex + vat);
+        const ex = r2(r.amount_ex_vat), vat = r2(ex * VAT_RATE), tot = r2(ex + vat);
         await client.query(
           `INSERT INTO vat_output_details (company_id,period_id,invoice_date,invoice_no,customer_name,customer_tax_id,description,amount_ex_vat,vat_amount,total_amount,source)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'import')`,
@@ -162,7 +163,7 @@ router.post('/input/batch', checkPeriodLock, async (req, res, next) => {
 
     await client.query('BEGIN');
     for (const e of entries) {
-      const ex = r2(e.amount_ex_vat), vat = r2(ex * 0.07), tot = r2(ex + vat);
+      const ex = r2(e.amount_ex_vat), vat = r2(ex * VAT_RATE), tot = r2(ex + vat);
       await client.query(
         `INSERT INTO vat_input_details (company_id,period_id,invoice_date,invoice_no,supplier_name,supplier_tax_id,description,amount_ex_vat,vat_amount,total_amount,deductible,category,source)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
@@ -212,7 +213,7 @@ router.post('/input/import-csv', checkPeriodLock, upload.single('file'), async (
       let ok = 0;
       for (const r of rows) {
         if (!r.invoice_date || !r.supplier_name || !r.amount_ex_vat) continue;
-        const ex = r2(r.amount_ex_vat), vat = r2(ex * 0.07), tot = r2(ex + vat);
+        const ex = r2(r.amount_ex_vat), vat = r2(ex * VAT_RATE), tot = r2(ex + vat);
         const ded = r.deductible ? (r.deductible.toLowerCase() === 'true') : true;
         await client.query(
           `INSERT INTO vat_input_details (company_id,period_id,invoice_date,invoice_no,supplier_name,supplier_tax_id,description,amount_ex_vat,vat_amount,total_amount,deductible,category,source)

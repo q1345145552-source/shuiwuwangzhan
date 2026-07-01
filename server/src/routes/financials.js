@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { VAT_RATE } = require('../constants');
 
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
@@ -9,7 +10,7 @@ function calcProfitLoss(s) {
   const refunds = r2(s.platform_refunds);
   const otherInc = r2(s.other_income);
   const netSales = gross - refunds;
-  const netExVat = r2(netSales / 1.07);
+  const netExVat = r2(netSales  / (1 + VAT_RATE));
 
   const cogsVal = r2(s.cost_of_goods);
   const platformFees = r2(s.platform_fees);
@@ -120,7 +121,7 @@ router.get('/vat-report', async (req, res, next) => {
       const sales = await pool.query('SELECT * FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
       if (sales.rows.length > 0) {
         const s = sales.rows[0];
-        salesAmount = r2((parseFloat(s.platform_sales) - parseFloat(s.platform_refunds)) / 1.07);
+        salesAmount = r2((parseFloat(s.platform_sales) - parseFloat(s.platform_refunds))  / (1 + VAT_RATE));
         vatSales = r2(s.vat_sales_calculated);
         vatPurchases = r2(s.vat_purchases_calculated);
       }

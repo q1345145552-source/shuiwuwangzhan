@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('../db');
 const { logAudit } = require('../middleware/audit');
+const { VAT_RATE } = require('../constants');
 
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 const fmtNum = n => (r2(n)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -78,8 +79,8 @@ router.post('/generate', async (req, res, next) => {
           [company_id, pid]
         );
         const s = salesRes.rows[0] || { platform_sales: 0, platform_refunds: 0 };
-        const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0)) / 1.07);
-        const expectedVat = r2(netSales * 0.07);
+        const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0))  / (1 + VAT_RATE));
+        const expectedVat = r2(netSales * VAT_RATE);
 
         const vatRes = await pool.query(
           'SELECT COALESCE(SUM(vat_amount),0) as declared FROM vat_output_details WHERE company_id=$1 AND period_id=$2',
