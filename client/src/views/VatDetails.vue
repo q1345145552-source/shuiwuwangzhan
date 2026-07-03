@@ -226,6 +226,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
+import { useCompanyStore } from '../stores/currentCompany'
 import { downloadFile, openPdf } from '../api/download'
 
 const store = useCompanyStore()
@@ -323,7 +324,7 @@ const onTabChange = (t) => { if (t==='output') fetchOutput(); else fetchInput() 
 // Output actions
 const addOutputRow = () => outputRows.value.push(emptyOutput())
 const submitOutput = async () => {
-  const valid = outputRows.value.filter(r => row.invoice_date && r.amount_ex_vat > 0)
+  const valid = outputRows.value.filter(r => r.invoice_date && r.amount_ex_vat > 0)
   if (valid.length===0) { ElMessage.error('无有效数据'); return }
   outSaving.value = true
   try {
@@ -334,14 +335,14 @@ const submitOutput = async () => {
   } catch(e) { ElMessage.error(e.response?.data?.error||'失败') } finally { outSaving.value = false }
 }
 const delOutput = async (r) => {
-  try { await ElMessageBox.confirm('删除该条销项？','确认',{type:'warning'}); await api.delete(`/vat-details/output/${row.id}`); fetchOutput(); fetchSummaries(); fetchReconciliation() }
+  try { await ElMessageBox.confirm('删除该条销项？','确认',{type:'warning'}); await api.delete(`/vat-details/output/${r.id}`); fetchOutput(); fetchSummaries(); fetchReconciliation() }
   catch(e) { if(e!=='cancel') ElMessage.error('删除失败') }
 }
 
 // Input actions
 const addInputRow = () => inputRows.value.push(emptyInput())
 const submitInput = async () => {
-  const valid = inputRows.value.filter(r => row.invoice_date && row.supplier_name && r.amount_ex_vat > 0)
+  const valid = inputRows.value.filter(r => r.invoice_date && r.supplier_name && r.amount_ex_vat > 0)
   if (valid.length===0) { ElMessage.error('无有效数据'); return }
   inSaving.value = true
   try {
@@ -352,12 +353,12 @@ const submitInput = async () => {
   } catch(e) { ElMessage.error(e.response?.data?.error||'失败') } finally { inSaving.value = false }
 }
 const delInput = async (r) => {
-  try { await ElMessageBox.confirm('删除该条进项？','确认',{type:'warning'}); await api.delete(`/vat-details/input/${row.id}`); fetchInput(); fetchSummaries(); fetchReconciliation() }
+  try { await ElMessageBox.confirm('删除该条进项？','确认',{type:'warning'}); await api.delete(`/vat-details/input/${r.id}`); fetchInput(); fetchSummaries(); fetchReconciliation() }
   catch(e) { if(e!=='cancel') ElMessage.error('删除失败') }
 }
 const toggleDeductible = async (r) => {
-  try { await api.put(`/vat-details/input/${row.id}/deductible`, { deductible: row.deductible }); fetchSummaries(); fetchReconciliation() }
-  catch(e) { ElMessage.error('更新失败'); row.deductible = !row.deductible }
+  try { await api.put(`/vat-details/input/${r.id}/deductible`, { deductible: r.deductible }); fetchSummaries(); fetchReconciliation() }
+  catch(e) { ElMessage.error('更新失败'); r.deductible = !r.deductible }
 }
 
 // CSV uploads

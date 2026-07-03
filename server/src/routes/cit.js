@@ -188,17 +188,7 @@ router.post('/report', async (req, res, next) => {
       vals
     );
 
-    // Fix: run simpler query
-    const json = fields;
-    // Delete then insert approach
-    await pool.query('DELETE FROM cit_reports WHERE company_id=$1 AND year=$2', [company_id, year]);
-    const insertResult = await pool.query(
-      `INSERT INTO cit_reports (${numKeys.join(',')}, company_id, year, status, notes)
-       VALUES (${numKeys.map((_,i)=>`$${i+1}`).join(',')}, $${numKeys.length+1}, $${numKeys.length+2}, $${numKeys.length+3}, $${numKeys.length+4})
-       RETURNING *`,
-      [...numKeys.map(k => r2(fields[k]||0)), company_id, year, fields.status||'draft', fields.notes||'']
-    );
-    res.status(201).json(insertResult.rows[0]);
+    res.status(201).json(result.rows[0]);
   } catch (err) { next(err); }
 });
 

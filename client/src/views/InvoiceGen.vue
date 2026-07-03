@@ -122,10 +122,13 @@
 </template>
 
 <script setup>
+const store = useCompanyStore()
+
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import api from '../api'
+import { useCompanyStore } from '../stores/currentCompany'
 
 const companies = ref([])
 const periods = ref([])

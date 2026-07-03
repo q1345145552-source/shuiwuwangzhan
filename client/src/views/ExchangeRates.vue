@@ -170,7 +170,7 @@ async function loadRates(){
   // Auto-fill converter rate
   const cur=rates.value.find(r=>r.month===new Date().getMonth()+1)
   if(cur?.rate_thb_cny) conv.rate=parseFloat(cur.rate_thb_cny)}
-  catch(e){}
+  catch(e){ ElMessage.error(e?.response?.data?.error || '操作失败') }
 }
 function openDialog(row){
   if(row){
@@ -190,7 +190,7 @@ async function saveRate(){
 }
 async function deleteRate(row){
   try{await ElMessageBox.confirm(`删除 ${row.month}月汇率？`,'确认',{type:'warning'});await api.delete('/exchange/rates/'+row.id);ElMessage.success('已删除');loadRates()}
-  catch(e){}
+  catch(e){ ElMessage.error(e?.response?.data?.error || '操作失败') }
 }
 async function saveBatch(){
   batchLoading.value=true

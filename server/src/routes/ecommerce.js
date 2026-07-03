@@ -72,7 +72,7 @@ router.get('/sales', async (req, res, next) => {
 });
 
 // POST /api/ecommerce/calculate-vat
-router.post('/calculate-vat', async (req, res, next) => {
+router.post('/calculate-vat', checkPeriodLock, async (req, res, next) => {
   try {
     const { company_id, period_id, platform_sales, platform_refunds, platform_fees, advertising_fees, shipping_fees, cost_of_goods, import_vat_paid } = req.body;
 
@@ -92,7 +92,7 @@ router.post('/calculate-vat', async (req, res, next) => {
 });
 
 // POST /api/ecommerce/compliance - VAT compliance check
-router.post('/compliance', async (req, res, next) => {
+router.post('/compliance', checkPeriodLock, async (req, res, next) => {
   try {
     const { company_id, vat_registered, monthly_sales } = req.body;
     if (!company_id || !Array.isArray(monthly_sales)) {

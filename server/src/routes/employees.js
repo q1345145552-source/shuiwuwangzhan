@@ -264,10 +264,11 @@ router.post('/pnd1/calculate', async (req, res, next) => {
 
     for (const emp of emps.rows) {
       const salary = parseFloat(emp.salary);
-      const annualized = salary * 12;
+      const monthsWorked = parseInt(emp.months_worked) || 12; // Default 12 for full year
+      const annualized = salary * monthsWorked;
 
       // Personal allowance (60,000 THB) + employee SS deduction (max 9,000) as defaults
-      const ssEmployeeDeduction = ssMap[emp.id] ? parseFloat(ssMap[emp.id].employee_contribution) * 12 : 0;
+      const ssEmployeeDeduction = ssMap[emp.id] ? parseFloat(ssMap[emp.id].employee_contribution) * monthsWorked : 0;
       const personalAllowance = 60000;
       const expenseDeduction = Math.min(annualized * 0.5, 100000); // employment expense deduction 50% max 100k
       const taxableIncome = Math.max(0, annualized - expenseDeduction - personalAllowance - ssEmployeeDeduction);

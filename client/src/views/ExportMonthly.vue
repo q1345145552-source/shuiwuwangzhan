@@ -37,9 +37,12 @@
 </template>
 
 <script setup>
+const store = useCompanyStore()
+
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
+import { useCompanyStore } from '../stores/currentCompany'
 import { downloadFile, openPdf } from '../api/download'
 
 const companies = ref([])

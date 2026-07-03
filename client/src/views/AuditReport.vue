@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <el-select v-model="companyId" placeholder="客户公司" style="width:220px" filterable>
+      <el-select v-model="companyId" placeholder="客户公司" @change="onCompanyChange" style="width:220px" filterable>
         <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
       </el-select>
       <el-select v-model="year" style="width:110px;margin-left:12px">
@@ -131,7 +131,7 @@ async function loadCompanies(){
 async function loadHistory(){
   if(!companyId.value)return;histLoading.value=true
   try{history.value=await api.get('/audit-report/history',{params:{company_id:companyId.value}})}
-  catch(e){}finally{histLoading.value=false}
+  catch(e){ ElMessage.error('加载失败') } finally{histLoading.value=false}
 }
 async function generate(){
   generating.value=true

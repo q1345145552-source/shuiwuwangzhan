@@ -186,7 +186,7 @@ router.delete('/input/:id', checkPeriodLock, async (req, res, next) => {
 });
 
 // PUT /api/vat-details/input/:id/deductible
-router.put('/input/:id/deductible', async (req, res, next) => {
+router.put('/input/:id/deductible', checkPeriodLock, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { deductible } = req.body;

@@ -3,8 +3,30 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
+
+// Simple in-memory rate limiter for login
+const loginAttempts = new Map();
+
+function checkLoginRateLimit(req, res, next) {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000;
+  const maxAttempts = 10;
+  
+  const record = loginAttempts.get(ip);
+  if (record && (now - record.firstAttempt) < windowMs) {
+    if (record.count >= maxAttempts) {
+      return res.status(429).json({ error: '登录尝试次数过多，请15分钟后重试' });
+    }
+    record.count++;
+  } else {
+    loginAttempts.set(ip, { count: 1, firstAttempt: now });
+  }
+  next();
+}
+
 // POST /api/auth/login
-router.post('/login', async (req, res, next) => {
+router.post('/login', checkLoginRateLimit, async (req, res, next) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {

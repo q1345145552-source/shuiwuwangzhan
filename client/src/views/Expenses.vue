@@ -167,6 +167,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
+import { useCompanyStore } from '../stores/currentCompany'
 import { downloadFile, openPdf } from '../api/download'
 
 const store = useCompanyStore()

@@ -160,7 +160,7 @@ router.put('/:id/wht-info', checkPeriodLock, async (req, res, next) => {
 });
 
 // DELETE /api/expenses/:id
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', checkPeriodLock, async (req, res, next) => {
   try {
     const { id } = req.params;
     const r = await pool.query('DELETE FROM expense_details WHERE id=$1 RETURNING *', [id]);

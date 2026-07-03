@@ -114,6 +114,9 @@ module.exports = router;
 
 // POST /api/exchange/copy-to-companies - 单条SQL批量复制
 router.post('/copy-to-companies', async (req, res, next) => {
+    if (!req.body.confirmed) {
+      return res.status(400).json({ error: '复制操作需确认，请设置 confirmed: true' });
+    }
   try {
     const { source_company_id, target_company_ids, year } = req.body;
     if (!source_company_id || !target_company_ids || !target_company_ids.length || !year) {
@@ -159,6 +162,9 @@ router.post('/copy-to-companies', async (req, res, next) => {
 
 // POST /api/exchange/batch-copy-all - 批量填充所有公司汇率（单条SQL, 无N+1）
 router.post('/batch-copy-all', async (req, res, next) => {
+    if (!req.body.confirmed) {
+      return res.status(400).json({ error: '批量操作需确认，请设置 confirmed: true' });
+    }
   try {
     const { year, rate, override_existing } = req.body;
     if (!year || !rate) {

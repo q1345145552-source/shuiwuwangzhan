@@ -193,7 +193,7 @@ function getMonthItems(m) {
 }
 
 async function loadCompanies() {
-  const { data } = await api.get('/companies')
+  const data = await api.get('/companies')
   companies.value = data
 }
 
@@ -205,7 +205,7 @@ async function loadAll() {
 async function loadCalendar() {
   if (!companyId.value) return
   try {
-    const { data } = await api.get('/compliance/calendar', {
+    const data = await api.get('/compliance/calendar', {
       params: { company_id: companyId.value, year: viewYear.value }
     })
     calendarItems.value = data.items || []
@@ -214,7 +214,7 @@ async function loadCalendar() {
 
 async function loadUpcoming() {
   try {
-    const { data } = await api.get('/compliance/upcoming', {
+    const data = await api.get('/compliance/upcoming', {
       params: { company_id: companyId.value, days: 30 }
     })
     upcomingItems.value = data.items || []
@@ -223,7 +223,7 @@ async function loadUpcoming() {
 
 async function loadOverdue() {
   try {
-    const { data } = await api.get('/compliance/overdue', {
+    const data = await api.get('/compliance/overdue', {
       params: { company_id: companyId.value }
     })
     overdueItems.value = data.items || []
@@ -232,7 +232,7 @@ async function loadOverdue() {
 
 async function loadSettings() {
   try {
-    const { data } = await api.get('/compliance/settings', {
+    const data = await api.get('/compliance/settings', {
       params: { company_id: companyId.value }
     })
     if (data) Object.assign(settings.value, data)

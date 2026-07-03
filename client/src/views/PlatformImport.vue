@@ -134,12 +134,12 @@ async function loadCompanies() {
 
 async function loadPeriods() {
   if (!companyId.value) return
-  try { const data = await api.get('/periods', { params: { company_id: companyId.value } }); periods.value = Array.isArray(data) ? data : [] } catch (e) {}
+  try { const data = await api.get('/periods', { params: { company_id: companyId.value } }); periods.value = Array.isArray(data) ? data : [] } catch (e) { periods.value = [] }
 }
 
 async function loadHistory() {
   if (!companyId.value) return
-  try { history.value = await api.get('/platform-import/history', { params: { company_id: companyId.value } }) } catch (e) {}
+  try { history.value = await api.get('/platform-import/history', { params: { company_id: companyId.value } }) } catch (e) { history.value = [] }
 }
 
 async function onFileChange(file) {

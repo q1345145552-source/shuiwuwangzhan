@@ -137,7 +137,7 @@ router.post('/import', checkPeriodLock, upload.single('file'), async (req, res, 
 });
 
 // DELETE /api/bank/:id
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', checkPeriodLock, async (req, res, next) => {
   try {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM bank_transactions WHERE id = $1 RETURNING *', [id]);

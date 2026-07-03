@@ -180,7 +180,7 @@ const r = v => parseFloat(v) || 0
 const fmt = v => r(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 async function loadCompanies() {
-  const { data } = await api.get('/companies')
+  const data = await api.get('/companies')
   companies.value = data
   if (data.length) { companyId.value = data[0].id; loadExData() }
 }
@@ -202,7 +202,7 @@ function generateMonths() {
 async function loadExData() {
   if (!companyId.value) return
   try {
-    const { data } = await api.get('/vat-compliance', { params: { company_id: companyId.value } })
+    const data = await api.get('/vat-compliance', { params: { company_id: companyId.value } })
     // vat_compliance 里可能有 monthly data
     if (!data.length) return
     // 如果已有合规检测数据，尝试读取
@@ -212,7 +212,7 @@ async function loadExData() {
 async function generatePlan() {
   planLoading.value = true
   try {
-    const { data } = await api.post('/compliance/tax-relief-plan', {
+    const data = await api.post('/compliance/tax-relief-plan', {
       company_id: companyId.value,
       start_month: startMonth.value,
       end_month: endMonth.value,

@@ -176,7 +176,7 @@ router.get('/balance-sheet', async (req, res, next) => {
     const s = sales.rows[0];
     // Simplified balance sheet from ecommerce data
     const cash = r2(parseFloat(s.platform_sales) - parseFloat(s.platform_refunds) - parseFloat(s.cost_of_goods) - parseFloat(s.platform_fees) - parseFloat(s.rental_fees) - parseFloat(s.salary_fees) - parseFloat(s.warehouse_fees) - parseFloat(s.other_expenses) - parseFloat(s.advertising_fees) - parseFloat(s.shipping_fees));
-    const totalAssets = Math.max(0, cash);
+    const totalAssets = cash;
 
     res.json({
       company_id: parseInt(company_id), period: period.rows[0],

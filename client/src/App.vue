@@ -77,7 +77,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useCompanyStore } from './stores/currentCompany'
 import { Bell } from '@element-plus/icons-vue'
 import api from './api'

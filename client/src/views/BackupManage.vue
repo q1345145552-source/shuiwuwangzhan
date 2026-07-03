@@ -103,9 +103,14 @@ function doDownloadBackup(filename) {
 async function deleteFile(filename) {
   try {
     await ElMessageBox.confirm(`确定删除备份文件 "${filename}"？`, '确认', { type: 'warning' })
-    // no delete API, skip for now
-    ElMessage.warning('请手动删除文件')
-  } catch (e) { /* cancelled */ }
+    await api.delete('/backup/' + encodeURIComponent(filename))
+    ElMessage.success('已删除')
+    loadBackups()
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error(e?.response?.data?.error || '删除失败')
+    }
+  }
 }
 
 onMounted(() => { loadBackups() })

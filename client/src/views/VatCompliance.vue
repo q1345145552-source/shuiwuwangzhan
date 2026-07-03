@@ -139,8 +139,8 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import api from '../api'
+import { useCompanyStore } from '../stores/currentCompany'
 
-const store = useCompanyStore()
 import CompanyPeriodSelector from '../components/CompanyPeriodSelector.vue'
 
 const companies = ref([])

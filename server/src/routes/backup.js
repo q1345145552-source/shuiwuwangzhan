@@ -81,4 +81,26 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+
+// DELETE /api/backup/:filename
+router.delete('/:filename', (req, res, next) => {
+  try {
+    const safeFilename = path.basename(req.params.filename);
+    const backupDir = path.resolve(BACKUP_DIR);
+    const filepath = path.resolve(path.join(backupDir, safeFilename));
+
+    if (!filepath.startsWith(backupDir + path.sep)) {
+      return res.status(403).json({ error: '拒绝访问' });
+    }
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ error: '文件不存在' });
+    }
+    fs.unlinkSync(filepath);
+    res.json({ success: true });
+  } catch (e) { 
+    console.error('删除备份失败:', e.message);
+    return res.status(500).json({ error: '删除失败' });
+  }
+});
+
 module.exports = router;

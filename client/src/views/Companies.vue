@@ -156,7 +156,7 @@ const filteredList = computed(() => {
 
 async function loadList() {
   loading.value = true
-  try { const d = await api.get('/companies'); companies.value = Array.isArray(d) ? d : [] } catch(e) {}
+  try { const d = await api.get('/companies'); companies.value = Array.isArray(d) ? d : [] } catch(e) { companies.value = [] }
   finally { loading.value = false }
 }
 

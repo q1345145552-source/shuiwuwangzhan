@@ -14,8 +14,8 @@ if (!fs.existsSync(CERT_DIR)) fs.mkdirSync(CERT_DIR, { recursive: true });
 const WHT_RATES = {
   rental:      { name: '租金',      pnd53: 5,  pnd54: 15 },
   service:     { name: '服务费',    pnd53: 3,  pnd54: 15 },
-  interest:    { name: '利息',      pnd53: 10, pnd54: 15 },
-  royalty:     { name: '特许权',    pnd53: 15, pnd54: 15 },
+  interest:    { name: '利息',      pnd53: 1,  pnd54: 15 },
+  royalty:     { name: '特许权',    pnd53: 3,  pnd54: 15 },
   advertising: { name: '广告费',    pnd53: 2,  pnd54: 15 },
   transport:   { name: '运输费',    pnd53: 1,  pnd54: 15 },
   other:       { name: '其他',      pnd53: 3,  pnd54: 15 },

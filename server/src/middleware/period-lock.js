@@ -12,7 +12,7 @@ async function checkPeriodLock(req, res, next) {
     next();
   } catch (err) {
     console.error('期间锁定检查失败:', err.message);
-    next();
+    return res.status(500).json({ error: '期间锁定检查失败，请稍后重试' });
   }
 }
 
