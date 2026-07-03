@@ -1,6 +1,9 @@
 <template>
   <div id="app">
-    <el-container style="height:100vh">
+    <!-- 登录页：不显示外壳 -->
+    <router-view v-if="isLoginPage" />
+    <!-- 已登录：完整外壳 -->
+    <el-container v-else style="height:100vh">
       <el-aside width="210px" style="background:#304156;overflow-y:auto;display:flex;flex-direction:column">
         <div class="logo">🏢 电商税务管理</div>
         <CompanySwitcher />
@@ -84,7 +87,12 @@ import api from './api'
 import CompanySwitcher from './components/CompanySwitcher.vue'
 
 const route = useRoute()
+const router = useRouter()
 const store = useCompanyStore()
+
+// 是否在登录页
+const isLoginPage = computed(() => route.path === '/login')
+
 const userDisplayName = computed(() => {
   try { return JSON.parse(localStorage.getItem('user'))?.name || '管理员' } catch { return '管理员' }
 })
@@ -121,10 +129,9 @@ const taxRouteMap = {
 }
 
 const goToTax = (a) => {
-  const route = taxRouteMap[a.tax_type]
-  if (route) {
-    const router = useRouter()
-    router.push(route)
+  const target = taxRouteMap[a.tax_type]
+  if (target) {
+    router.push(target)
   }
 }
 
