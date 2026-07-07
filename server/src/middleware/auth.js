@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const { pool } = require('../db');
 
-const authMiddleware = (req, res, next) => {
+const authMiddleware = async (req, res, next) => {
   if (process.env.SKIP_AUTH === "true") return next();
 
   // 跳过登录接口和健康检查
@@ -17,6 +18,8 @@ const authMiddleware = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
+    const userResult = await pool.query('SELECT role FROM users WHERE id = $1', [decoded.id]);
+    req.userRole = userResult.rows[0]?.role || 'operator';
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
