@@ -1,0 +1,53 @@
+services:
+  app:
+    build: .
+    container_name: thai-tax-app
+    ports:
+      - "3001:3007"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - DB_NAME=thai_tax_db
+      - PORT=3007
+      - JWT_SECRET=thai-tax-jwt-secret-2026
+      - JWT_EXPIRES_IN=24h
+      - AUTH_USERNAME=admin
+      - AUTH_PASSWORD=$2b$10$.xYiqXcjtvYhlnc4uYTjFO4IgYi6i3yMP7YmCi5rrLTYNTMskV7em
+      - SKIP_AUTH=false
+      - ALLOWED_ORIGINS=http://localhost:3001,http://localhost:3007,http://localhost:5173
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - invoices_data:/app/server/invoices
+      - wht_certs_data:/app/server/wht-certificates
+      - exports_data:/app/server/exports
+      - audit_reports_data:/app/server/audit-reports
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: thai-tax-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_DB=thai_tax_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  invoices_data:
+  wht_certs_data:
+  exports_data:
+  audit_reports_data:
