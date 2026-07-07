@@ -23,6 +23,7 @@ const routes = [
   { path: '/backup', name: 'BackupManage', component: () => import('../views/BackupManage.vue') },
   { path: '/platform-import', name: 'PlatformImport', component: () => import('../views/PlatformImport.vue') },
   { path: '/platform-comparison', name: 'PlatformComparison', component: () => import('../views/PlatformComparison.vue') },
+  { path: '/tax-calculator', name: 'TaxCalculator', component: () => import('../views/TaxCalculator.vue') },
   { path: '/exchange-rates', name: 'ExchangeRates', component: () => import('../views/ExchangeRates.vue') },
   { path: '/audit-report', name: 'AuditReport', component: () => import('../views/AuditReport.vue') },
   { path: '/employees', name: 'Employees', component: () => import('../views/Employees.vue') },

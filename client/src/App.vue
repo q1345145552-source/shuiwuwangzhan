@@ -30,6 +30,7 @@
           <el-menu-item index="/bank"><el-icon><CreditCard /></el-icon> 银行流水</el-menu-item>
           <el-menu-item index="/expenses"><el-icon><Money /></el-icon> 费用管理</el-menu-item>
           <el-menu-item index="/exchange-rates"><el-icon><Coin /></el-icon> 汇率管理</el-menu-item>
+          <el-menu-item index="/tax-calculator"><el-icon><MagicStick /></el-icon> 税务计算器</el-menu-item>
           <el-menu-item index="/employees"><el-icon><User /></el-icon> 员工管理</el-menu-item>
           <el-menu-item index="/pnd1"><el-icon><List /></el-icon> PND.1 工资税</el-menu-item>
           <el-menu-item index="/cit"><el-icon><DataAnalysis /></el-icon> CIT 年度申报</el-menu-item>
@@ -82,7 +83,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCompanyStore } from './stores/currentCompany'
-import { Bell } from '@element-plus/icons-vue'
+import { Bell, MagicStick } from '@element-plus/icons-vue'
 import api from './api'
 import CompanySwitcher from './components/CompanySwitcher.vue'
 
@@ -162,7 +163,7 @@ const pageTitle = computed(() => {
     '/tax-relief': '历史补税方案', '/platform-import': '平台CSV导入',
     '/platform-comparison': '数据对比看板', '/employees': '员工管理',
     '/pnd1': 'PND.1 工资预扣税', '/backup': '数据备份',
-    '/audit-logs': '操作日志', '/exchange-rates': '汇率管理',
+    '/audit-logs': '操作日志', '/exchange-rates': '汇率管理', '/tax-calculator': '税务计算器',
     '/audit-report': '稽查报告', '/data-validator': '数据校验'
   }
   const p = route.path
