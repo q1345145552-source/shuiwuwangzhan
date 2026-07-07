@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { logAudit } = require('../middleware/audit');
+const { calcExpenseDeduction } = require('../engine-expense');
+const { calcTotalAllowance } = require('../engine-allowance');
+const { calcAnnualTax } = require('../engine-taxrate');
 
 const r2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
 
@@ -212,32 +215,6 @@ router.get('/social-security/annual', async (req, res, next) => {
 
 // ==================== PND.1 工资预扣税 ====================
 
-// 泰国 PIT 累进税率表（年化）
-const PIT_BRACKETS = [
-  { threshold: 150000, rate: 0 },
-  { threshold: 300000, rate: 0.05 },
-  { threshold: 500000, rate: 0.10 },
-  { threshold: 750000, rate: 0.15 },
-  { threshold: 1000000, rate: 0.20 },
-  { threshold: 2000000, rate: 0.25 },
-  { threshold: 5000000, rate: 0.30 },
-  { threshold: Infinity, rate: 0.35 }
-];
-
-function calcAnnualTax(taxableIncome) {
-  let tax = 0;
-  let remaining = taxableIncome;
-  let prevThreshold = 0;
-  for (const bracket of PIT_BRACKETS) {
-    const bracketAmount = Math.min(remaining, bracket.threshold - prevThreshold);
-    if (bracketAmount <= 0) break;
-    tax += bracketAmount * bracket.rate;
-    remaining -= bracketAmount;
-    prevThreshold = bracket.threshold;
-  }
-  return r2(tax);
-}
-
 // POST /api/pnd1/calculate
 router.post('/pnd1/calculate', async (req, res, next) => {
   try {
@@ -264,27 +241,76 @@ router.post('/pnd1/calculate', async (req, res, next) => {
 
     for (const emp of emps.rows) {
       const salary = parseFloat(emp.salary);
-      const monthsWorked = parseInt(emp.months_worked) || 12; // Default 12 for full year
-      const annualized = salary * monthsWorked;
+      const monthsWorked = parseInt(emp.months_worked) || 12;
 
-      // Personal allowance (60,000 THB) + employee SS deduction (max 9,000) as defaults
-      const ssEmployeeDeduction = ssMap[emp.id] ? parseFloat(ssMap[emp.id].employee_contribution) * monthsWorked : 0;
-      const personalAllowance = 60000;
-      const expenseDeduction = Math.min(annualized * 0.5, 100000); // employment expense deduction 50% max 100k
-      const taxableIncome = Math.max(0, annualized - expenseDeduction - personalAllowance - ssEmployeeDeduction);
+      // Step 1: 年化收入
+      const annualized = r2(salary * monthsWorked);
 
-      const annualTax = calcAnnualTax(taxableIncome);
-      const monthlyWht = r2(annualTax / 12);
+      // Step 2: 收入减免前（当前阶段无特别减免税收入）
+      const incomeAfterExemption = annualized;
 
+      // Step 3: 费用扣除（工资收入 = 40_1_2）
+      const expenseDeduction = r2(calcExpenseDeduction(annualized, '40_1_2'));
+
+      // Step 4: 扣除费用后的收入
+      const incomeAfterExpense = r2(annualized - expenseDeduction);
+
+      // Step 5: 年社保扣缴额
+      const ssDeduction = ssMap[emp.id]
+        ? parseFloat(ssMap[emp.id].employee_contribution) * monthsWorked
+        : 0;
+
+      // Step 6: 配偶免税额
+      const isMarried = (emp.marital_status === 'married');
+      const spouseNoIncome = isMarried && (parseFloat(emp.spouse_income || 0) === 0);
+      const spouseAllowance = spouseNoIncome ? 60000 : 0;
+
+      // Step 7: 所有减免项汇总
+      const allowanceResult = calcTotalAllowance({
+        selfAllowance: 60000,
+        spouseAllowance: spouseAllowance,
+        childrenCount: parseInt(emp.children_count) || 0,
+        parentsCount: parseInt(emp.parents_count) || 0,
+        ssDeduction: ssDeduction,
+        lifeInsurance: parseFloat(emp.life_insurance) || 0,
+        healthInsurance: parseFloat(emp.health_insurance) || 0,
+        mortgageInterest: parseFloat(emp.mortgage_interest) || 0,
+        pensionInsurance: parseFloat(emp.pension_insurance) || 0,
+      });
+
+      // Step 8: 双倍扣除捐款
+      const donationDouble = parseFloat(emp.donation_double) || 0;
+
+      // Step 9: 普通捐款
+      const donationNormal = parseFloat(emp.donation_normal) || 0;
+
+      // Step 10: 应税收入
+      const taxableIncome = Math.max(0,
+        incomeAfterExpense - allowanceResult.total - donationDouble - donationNormal
+      );
+
+      // Step 11: 年税
+      const { annualTax } = calcAnnualTax(taxableIncome);
+
+      // Step 12: 已预扣（留接口，当前为 0）
+      const priorWithholding = 0;
+
+      // Step 13: 剩余年税
+      const remainingAnnualTax = Math.max(0, annualTax - priorWithholding);
+
+      // Step 14: 月预扣
+      const monthlyWht = r2(remainingAnnualTax / 12);
+
+      // Step 15: 结果入库
       items.push({
         employee_id: emp.id,
         employee_name: emp.full_name,
         employee_code: emp.employee_code,
         salary: r2(salary),
         annual_salary: r2(annualized),
-        expense_deduction: r2(expenseDeduction),
-        personal_allowance: personalAllowance,
-        ss_deduction: r2(ssEmployeeDeduction),
+        expense_deduction: expenseDeduction,
+        allowance_total: r2(allowanceResult.total),
+        ss_deduction: r2(ssDeduction),
         taxable_income: r2(taxableIncome),
         annual_tax: annualTax,
         monthly_wht: monthlyWht
@@ -329,7 +355,7 @@ router.post('/pnd1/report', async (req, res, next) => {
       const annualized = salary * 12;
       const expenseDeduction = Math.min(annualized * 0.5, 100000);
       const taxableIncome = Math.max(0, annualized - expenseDeduction - 60000);
-      const annualTax = calcAnnualTax(taxableIncome);
+      const { annualTax } = calcAnnualTax(taxableIncome);
       totalWht += r2(annualTax / 12);
     }
 
