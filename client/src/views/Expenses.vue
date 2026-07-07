@@ -279,7 +279,7 @@ watch(activeTab, (t) => { if (t==='list') fetchExpenses() })
 
 onMounted(fetchCompanies)
 
-function exportXlsx() { const cid=companyId.value, pid=periodId?.value||ssPeriodId?.value; if(!pid||!cid) return; downloadFile('/api/export/expenses/xlsx','expenses.xlsx',{company_id:cid,period_id:pid}) }
+function exportXlsx() { const cid=selectedCompanyId.value, pid=selectedPeriodId.value; if(!pid||!cid) return; downloadFile('/api/export/expenses/xlsx','expenses.xlsx',{company_id:cid,period_id:pid}) }
 </script>
 
 <style scoped>

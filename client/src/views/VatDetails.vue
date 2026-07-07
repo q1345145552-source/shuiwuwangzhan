@@ -164,7 +164,7 @@
               <el-table-column label="不含税" width="110" align="right"><template #default="{ row }">{{ parseFloat(row.amount_ex_vat).toLocaleString() }}</template></el-table-column>
               <el-table-column label="VAT" width="100" align="right"><template #default="{ row }">{{ parseFloat(row.vat_amount).toLocaleString() }}</template></el-table-column>
               <el-table-column label="可抵扣" width="80">
-                <template #default="{ row }"><el-switch v-model="row.deductible" size="small" @change="toggleDeductible(r)" /></template>
+                <template #default="{ row }"><el-switch v-model="row.deductible" size="small" @change="toggleDeductible(row)" /></template>
               </el-table-column>
               <el-table-column label="操作" width="60"><template #default="{ row }"><el-button link type="danger" size="small" @click="delInput(row)">删除</el-button></template></el-table-column>
             </el-table>
@@ -390,7 +390,7 @@ const recalcR = () => fetchReconciliation()
 
 onMounted(() => { fetchCompanies() })
 
-function exportXlsx() { const cid=companyId.value, pid=periodId?.value; if(!pid||!cid) return; downloadFile('/api/export/vat-details/xlsx','vat_details.xlsx',{company_id:cid,period_id:pid}) }
+function exportXlsx() { const cid=selectedCompanyId.value, pid=selectedPeriodId.value; if(!pid||!cid) return; downloadFile('/api/export/vat-details/xlsx','vat_details.xlsx',{company_id:cid,period_id:pid}) }
 </script>
 
 <style scoped>

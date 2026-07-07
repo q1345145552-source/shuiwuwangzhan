@@ -16,7 +16,7 @@ const authMiddleware = async (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     req.user = decoded;
     const userResult = await pool.query('SELECT role FROM users WHERE id = $1', [decoded.id]);
     req.userRole = userResult.rows[0]?.role || 'operator';

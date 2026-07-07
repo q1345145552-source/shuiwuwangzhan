@@ -70,7 +70,7 @@ router.get('/verify', async (req, res, next) => {
       return res.status(401).json({ error: '未登录' });
     }
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     res.json({ valid: true, user: decoded });
   } catch (err) {
     return res.status(401).json({ error: '登录已过期' });

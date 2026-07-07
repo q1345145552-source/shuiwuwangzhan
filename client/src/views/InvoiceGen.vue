@@ -158,7 +158,7 @@ const removeItem = (i) => { if (form.value.items.length > 1) form.value.items.sp
 const fetchCompanies = async () => {
   try { companies.value = await api.get('/companies') } catch (e) { console.error('InvoiceGen.vue: 请求失败', e) }
 }
-const fetchPeriods = () => store.loadPeriods(selectedCompanyId.value)
+const fetchPeriods = async () => { periods.value = await api.get('/periods', { params: { company_id: selectedCompanyId.value } }) }
 const fetchInvoices = async () => {
   try {
     invoices.value = await api.get('/invoices', {

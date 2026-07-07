@@ -8,8 +8,8 @@
           @company-change="onCompanyChange" @period-change="fetchReport"
         />
         <el-button type="primary" :disabled="!report" @click="saveReport" :loading="saving">保存</el-button>
-        <el-button :disabled="!report" :loading="exportLoading" @click="exportVat">导出 PDF
-        <el-button size="small" style="margin-left:8px" @click="exportXlsx">📥 Excel</el-button></el-button>
+        <el-button :disabled="!report" :loading="exportLoading" @click="exportVat">导出 PDF</el-button>
+        <el-button size="small" :disabled="!report" @click="exportXlsx">📥 Excel</el-button>
         <el-tag v-if="savedStatus" size="small">{{ savedStatus }}</el-tag>
       </div>
     </el-card>
@@ -152,7 +152,7 @@ const exportVat = async () => {
 
 onMounted(fetchCompanies)
 
-function exportXlsx() { const cid=companyId.value, pid=periodId?.value; if(!pid||!cid) return; downloadFile('/api/export/vat-report/xlsx','vat_report.xlsx',{company_id:cid,period_id:pid}) }
+function exportXlsx() { const cid=selectedCompanyId.value, pid=selectedPeriodId.value; if(!pid||!cid) return; downloadFile('/api/export/vat-report/xlsx','vat_report.xlsx',{company_id:cid,period_id:pid}) }
 </script>
 
 <style scoped>

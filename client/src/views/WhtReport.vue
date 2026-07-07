@@ -244,7 +244,7 @@ const emptyDetail = () => ({ payment_date: '', payee_name: '', payee_tax_id: '',
 const fetchCompanies = async () => {
   try { companies.value = await api.get('/companies') } catch (e) { console.error('WhtReport.vue: 请求失败', e) }
 }
-const fetchPeriods = () => store.loadPeriods(selectedCompanyId.value)
+const fetchPeriods = async () => { periods.value = await api.get('/periods', { params: { company_id: selectedCompanyId.value } }) }
 const fetchRates = async () => {
   try { rateTable.value = await api.get('/wht/rates') } catch (e) { console.error('WhtReport.vue: 请求失败', e) }
 }

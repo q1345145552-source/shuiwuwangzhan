@@ -26,9 +26,9 @@
 
       <div style="text-align:center;margin-top:24px">
         <el-button type="success" size="large" :loading="packageLoading" @click="downloadAll">
-          一键导出月度全套
-        <el-button size="small" style="margin-left:8px" @click="exportAllXlsx">📥 全量Excel</el-button>报表 (ZIP)
+          一键导出月度全套报表 (ZIP)
         </el-button>
+        <el-button size="small" :loading="packageLoading" @click="exportAllXlsx">📥 全量 Excel</el-button>
       </div>
     </el-card>
 
@@ -59,7 +59,7 @@ const reportItems = ref([
 const fetchCompanies = async () => {
   try { companies.value = await api.get('/companies') } catch (e) { console.error('ExportMonthly.vue: 请求失败', e) }
 }
-const fetchPeriods = () => store.loadPeriods(selectedCompanyId.value)
+const fetchPeriods = async () => { periods.value = await api.get('/periods', { params: { company_id: selectedCompanyId.value } }) }
 const onCompanyChange = () => { selectedPeriodId.value = null; fetchPeriods() }
 
 const downloadReport = async (item) => {
@@ -86,7 +86,7 @@ const downloadAll = async () => {
 
 onMounted(fetchCompanies)
 
-function exportAllXlsx() { const cid=companyId.value, pid=periodId?.value; if(!pid||!cid) return; downloadFile('/api/export/all/xlsx','full_export.xlsx',{company_id:cid,period_id:pid}) }
+function exportAllXlsx() { const cid=selectedCompanyId.value, pid=selectedPeriodId.value; if(!pid||!cid) return; downloadFile('/api/export/all/xlsx','full_export.xlsx',{company_id:cid,period_id:pid}) }
 </script>
 
 <style scoped>
