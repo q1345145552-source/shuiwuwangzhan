@@ -9,6 +9,9 @@ function calcProfitLoss(s) {
   const gross = r2(s.platform_sales);
   const refunds = r2(s.platform_refunds);
   const otherInc = r2(s.other_income);
+  const shippingInc = r2(s.shipping_income);
+  const discountVal = r2(s.discounts);
+  const platformSubsidy = r2(s.platform_subsidy);
   const netSales = gross - refunds;
   const netExVat = s._net_ex_vat_override !== undefined
     ? s._net_ex_vat_override
@@ -16,9 +19,14 @@ function calcProfitLoss(s) {
 
   const cogsVal = r2(s.cost_of_goods);
   const platformFees = r2(s.platform_fees);
-  const shipping = r2(s.shipping_fees);
   const advertising = r2(s.advertising_fees);
-  const costTotal = r2(cogsVal + platformFees + advertising + shipping);
+  const shipping = r2(s.shipping_fees);
+  const transactionFee = r2(s.transaction_fee);
+  const whtDeducted = r2(s.wht_deducted);
+  const campaignFee = r2(s.campaign_fee);
+  const affiliateCommission = r2(s.affiliate_commission);
+  const codFee = r2(s.cod_fee);
+  const costTotal = r2(cogsVal + platformFees + advertising + shipping + transactionFee + whtDeducted + campaignFee + affiliateCommission + codFee);
 
   const rent = r2(s.rental_fees);
   const salary = r2(s.salary_fees);
@@ -26,13 +34,27 @@ function calcProfitLoss(s) {
   const otherExp = r2(s.other_expenses);
   const expTotal = r2(rent + salary + warehouse + otherExp);
 
+  const importVat = r2(s.import_vat_paid);
+  const importDuty = r2(s.import_duty_paid);
+
   const grossProfit = r2(netExVat - costTotal);
   const netProfit = r2(grossProfit - expTotal);
 
   return {
-    sales: { gross, refunds, other_income: otherInc, net: r2(netSales), net_ex_vat: netExVat },
-    costs: { cogs: cogsVal, platform_fees: platformFees, shipping, advertising, total: costTotal },
+    sales: {
+      gross, refunds, shipping_income: shippingInc, discounts: discountVal,
+      platform_subsidy: platformSubsidy, other_income: otherInc,
+      net: r2(netSales), net_ex_vat: netExVat,
+      vat_sales: r2(s.vat_sales_calculated),
+    },
+    costs: {
+      cogs: cogsVal, platform_fees: platformFees, advertising, shipping,
+      transaction_fee: transactionFee, wht_deducted: whtDeducted,
+      campaign_fee: campaignFee, affiliate_commission: affiliateCommission,
+      cod_fee: codFee, total: costTotal,
+    },
     expenses: { rent, salary, warehouse, other: otherExp, total: expTotal },
+    imports: { import_vat: importVat, import_duty: importDuty },
     gross_profit: grossProfit,
     net_profit: netProfit,
   };
@@ -93,13 +115,16 @@ router.get('/profit-loss', async (req, res, next) => {
         import_vat_paid: sumFields(sales.rows, 'import_vat_paid'),
         import_duty_paid: sumFields(sales.rows, 'import_duty_paid'),
         actual_received: sumFields(sales.rows, 'actual_received'),
+        vat_sales_calculated: sumFields(sales.rows, 'vat_sales_calculated'),
+        vat_purchases_calculated: sumFields(sales.rows, 'vat_purchases_calculated'),
       };
       current = calcProfitLoss(agg);
     } else {
       current = {
-        sales: { gross: 0, refunds: 0, other_income: 0, net: 0, net_ex_vat: 0 },
-        costs: { cogs: 0, platform_fees: 0, shipping: 0, advertising: 0, total: 0 },
+        sales: { gross: 0, refunds: 0, shipping_income: 0, discounts: 0, platform_subsidy: 0, other_income: 0, net: 0, net_ex_vat: 0, vat_sales: 0 },
+        costs: { cogs: 0, platform_fees: 0, advertising: 0, shipping: 0, transaction_fee: 0, wht_deducted: 0, campaign_fee: 0, affiliate_commission: 0, cod_fee: 0, total: 0 },
         expenses: { rent: 0, salary: 0, warehouse: 0, other: 0, total: 0 },
+        imports: { import_vat: 0, import_duty: 0 },
         gross_profit: 0,
         net_profit: 0,
       };

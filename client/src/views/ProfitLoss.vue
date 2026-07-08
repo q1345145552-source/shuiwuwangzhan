@@ -8,7 +8,7 @@
           @company-change="onCompanyChange" @period-change="fetchData"
         />
         <el-button :disabled="!data" :loading="exportLoading" @click="exportPdf">导出 PDF</el-button>
-        <el-button size="small" @click="exportXlsx">📥 Excel</el-button>
+        <el-button size="small" @click="exportXlsx">Excel</el-button>
       </div>
     </el-card>
 
@@ -30,6 +30,7 @@
           </tr>
         </thead>
         <tbody>
+          <!-- 收入 -->
           <tr class="section-header"><td colspan="3">收入</td></tr>
           <tr>
             <td class="indent">平台总销售额（含VAT）</td>
@@ -38,8 +39,28 @@
           </tr>
           <tr>
             <td class="indent">减：退款</td>
-            <td class="num">{{ fmt(data.sales.refunds) }}</td>
-            <td class="num">{{ fmt(ytd.sales.refunds) }}</td>
+            <td class="num">({{ fmt(data.sales.refunds) }})</td>
+            <td class="num">({{ fmt(ytd.sales.refunds) }})</td>
+          </tr>
+          <tr>
+            <td class="indent">加：运费收入</td>
+            <td class="num">{{ fmt(data.sales.shipping_income) }}</td>
+            <td class="num">{{ fmt(ytd.sales.shipping_income) }}</td>
+          </tr>
+          <tr>
+            <td class="indent">减：优惠折扣</td>
+            <td class="num">({{ fmt(data.sales.discounts) }})</td>
+            <td class="num">({{ fmt(ytd.sales.discounts) }})</td>
+          </tr>
+          <tr>
+            <td class="indent">加：平台补贴</td>
+            <td class="num">{{ fmt(data.sales.platform_subsidy) }}</td>
+            <td class="num">{{ fmt(ytd.sales.platform_subsidy) }}</td>
+          </tr>
+          <tr>
+            <td class="indent">加：其他收入</td>
+            <td class="num">{{ fmt(data.sales.other_income) }}</td>
+            <td class="num">{{ fmt(ytd.sales.other_income) }}</td>
           </tr>
           <tr class="sub-total">
             <td>净销售收入（含VAT）</td>
@@ -57,13 +78,25 @@
             <td class="num" style="font-weight:bold">{{ fmt(ytd.sales.net_ex_vat) }}</td>
           </tr>
 
+          <!-- 成本 -->
           <tr class="section-header"><td colspan="3">成本</td></tr>
           <tr><td class="indent">采购成本</td><td class="num">{{ fmt(data.costs.cogs) }}</td><td class="num">{{ fmt(ytd.costs.cogs) }}</td></tr>
           <tr><td class="indent">平台佣金</td><td class="num">{{ fmt(data.costs.platform_fees) }}</td><td class="num">{{ fmt(ytd.costs.platform_fees) }}</td></tr>
           <tr><td class="indent">广告费</td><td class="num">{{ fmt(data.costs.advertising) }}</td><td class="num">{{ fmt(ytd.costs.advertising) }}</td></tr>
           <tr><td class="indent">物流运费</td><td class="num">{{ fmt(data.costs.shipping) }}</td><td class="num">{{ fmt(ytd.costs.shipping) }}</td></tr>
+          <tr><td class="indent">交易手续费</td><td class="num">{{ fmt(data.costs.transaction_fee) }}</td><td class="num">{{ fmt(ytd.costs.transaction_fee) }}</td></tr>
+          <tr><td class="indent">预扣税（WHT）</td><td class="num">{{ fmt(data.costs.wht_deducted) }}</td><td class="num">{{ fmt(ytd.costs.wht_deducted) }}</td></tr>
+          <tr><td class="indent">活动服务费</td><td class="num">{{ fmt(data.costs.campaign_fee) }}</td><td class="num">{{ fmt(ytd.costs.campaign_fee) }}</td></tr>
+          <tr><td class="indent">达人佣金</td><td class="num">{{ fmt(data.costs.affiliate_commission) }}</td><td class="num">{{ fmt(ytd.costs.affiliate_commission) }}</td></tr>
+          <tr><td class="indent">COD 手续费</td><td class="num">{{ fmt(data.costs.cod_fee) }}</td><td class="num">{{ fmt(ytd.costs.cod_fee) }}</td></tr>
           <tr class="sub-total"><td>成本合计</td><td class="num">{{ fmt(data.costs.total) }}</td><td class="num">{{ fmt(ytd.costs.total) }}</td></tr>
 
+          <!-- 进口 -->
+          <tr class="section-header"><td colspan="3">进口</td></tr>
+          <tr><td class="indent">进口 VAT 已缴</td><td class="num">{{ fmt(data.imports.import_vat) }}</td><td class="num">{{ fmt(ytd.imports.import_vat) }}</td></tr>
+          <tr><td class="indent">进口关税已缴</td><td class="num">{{ fmt(data.imports.import_duty) }}</td><td class="num">{{ fmt(ytd.imports.import_duty) }}</td></tr>
+
+          <!-- 毛利 -->
           <tr class="section-header"><td colspan="3">毛利</td></tr>
           <tr class="sub-total">
             <td>毛利</td>
@@ -71,6 +104,7 @@
             <td class="num" :style="{color: ytd.gross_profit >= 0 ? '#67c23a' : '#f56c6c'}">{{ fmt(ytd.gross_profit) }}</td>
           </tr>
 
+          <!-- 费用 -->
           <tr class="section-header"><td colspan="3">费用</td></tr>
           <tr><td class="indent">房租</td><td class="num">{{ fmt(data.expenses.rent) }}</td><td class="num">{{ fmt(ytd.expenses.rent) }}</td></tr>
           <tr><td class="indent">工资</td><td class="num">{{ fmt(data.expenses.salary) }}</td><td class="num">{{ fmt(ytd.expenses.salary) }}</td></tr>
@@ -78,6 +112,7 @@
           <tr><td class="indent">其他费用</td><td class="num">{{ fmt(data.expenses.other) }}</td><td class="num">{{ fmt(ytd.expenses.other) }}</td></tr>
           <tr class="sub-total"><td>费用合计</td><td class="num">{{ fmt(data.expenses.total) }}</td><td class="num">{{ fmt(ytd.expenses.total) }}</td></tr>
 
+          <!-- 净利润 -->
           <tr class="net-profit">
             <td>净利润</td>
             <td class="num" :style="{color: data.net_profit >= 0 ? '#67c23a' : '#f56c6c'}">{{ fmt(data.net_profit) }}</td>
@@ -96,7 +131,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useCompanyStore } from '../stores/currentCompany'
 import { ElMessage } from 'element-plus'
 import api from '../api'
-import { downloadFile, openPdf } from '../api/download'
+import { downloadFile } from '../api/download'
 
 const store = useCompanyStore()
 import CompanyPeriodSelector from '../components/CompanyPeriodSelector.vue'
@@ -110,12 +145,14 @@ const loading = ref(false)
 const exportLoading = ref(false)
 const companyName = ref('')
 
+const emptySales = { gross: 0, refunds: 0, shipping_income: 0, discounts: 0, platform_subsidy: 0, other_income: 0, net: 0, net_ex_vat: 0, vat_sales: 0 }
+const emptyCosts = { cogs: 0, platform_fees: 0, advertising: 0, shipping: 0, transaction_fee: 0, wht_deducted: 0, campaign_fee: 0, affiliate_commission: 0, cod_fee: 0, total: 0 }
+const emptyExpenses = { rent: 0, salary: 0, warehouse: 0, other: 0, total: 0 }
+const emptyImports = { import_vat: 0, import_duty: 0 }
+
 const ytd = computed(() => data.value?.ytd || {
-  sales: { gross: 0, refunds: 0, other_income: 0, net: 0, net_ex_vat: 0, vat_sales: 0 },
-  costs: { cogs: 0, platform_fees: 0, shipping: 0, advertising: 0, total: 0 },
-  expenses: { rent: 0, salary: 0, warehouse: 0, other: 0, total: 0 },
-  gross_profit: 0,
-  net_profit: 0,
+  sales: { ...emptySales }, costs: { ...emptyCosts }, expenses: { ...emptyExpenses }, imports: { ...emptyImports },
+  gross_profit: 0, net_profit: 0,
 })
 
 const fmt = (v) => (v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
