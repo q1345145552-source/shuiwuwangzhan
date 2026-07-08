@@ -16,13 +16,13 @@
         ref="uploadRef"
         :auto-upload="false"
         :limit="1"
-        accept=".csv"
+        accept=".csv,.xlsx"
         :on-change="onFileChange"
         drag
       >
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">拖拽 CSV 文件到此处，或 <em>点击选择</em></div>
-        <template #tip><div class="el-upload__tip">支持 Shopee / Lazada / TikTok Shop 后台导出的原始 CSV</div></template>
+        <template #tip><div class="el-upload__tip">支持 Shopee / Lazada / TikTok Shop 后台导出的 CSV / Excel</div></template>
       </el-upload>
       <div v-if="platformDetected" class="plat-badge">
         <el-tag type="success" size="large">{{ platformName }} 已识别 ✅</el-tag>

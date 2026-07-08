@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const Papa = require('papaparse');
+const xlsx = require('exceljs');
 const { pool } = require('../db');
 const { logAudit } = require('../middleware/audit');
 const { VAT_RATE } = require('../constants');
@@ -298,7 +299,35 @@ function translateToStandard(platformField) {
 }
 
 
-function parseCsvBuffer(buffer) {
+// Universal parser: reads .csv or .xlsx from buffer
+async function parseBuffer(buffer, originalname) {
+  const isExcel = originalname && /\.xlsx?$/i.test(originalname);
+
+  if (isExcel) {
+    const wb = new xlsx.Workbook();
+    await wb.xlsx.load(buffer);
+    const ws = wb.worksheets[0];
+    const rows = [];
+    const headers = [];
+    ws.eachRow((row, rowNum) => {
+      const vals = [];
+      if (typeof row.values === 'object') {
+        for (let i = 1; i < row.values.length; i++) {
+          vals.push(row.values[i] !== undefined && row.values[i] !== null ? String(row.values[i]) : '');
+        }
+      }
+      if (rowNum === 1) {
+        headers.push(...vals);
+      } else {
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
+        if (Object.keys(obj).some(k => obj[k])) rows.push(obj);
+      }
+    });
+    return { headers, rows };
+  }
+
+  // CSV fallback
   const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
   const result = Papa.parse(text, { header: true, skipEmptyLines: true, trimHeaders: true });
   return { headers: result.meta.fields || [], rows: result.data };
@@ -318,10 +347,10 @@ router.get('/templates', (req, res) => {
 // POST /api/platform-import/ai-map — AI 智能字段映射
 router.post('/ai-map', upload.single('file'), async (req, res, next) => {
   try {
-    if (!req.file) return res.status(400).json({ error: '请上传CSV文件' });
+    if (!req.file) return res.status(400).json({ error: '请上传 CSV 或 Excel 文件' });
 
-    const { headers, rows } = parseCsvBuffer(req.file.buffer);
-    if (!headers.length || !rows.length) return res.status(400).json({ error: 'CSV文件为空或格式不正确' });
+    const { headers, rows } = await parseBuffer(req.file.buffer, req.file.originalname);
+    if (!headers.length || !rows.length) return res.status(400).json({ error: '文件为空或格式不正确' });
 
     const detected = detectPlatform(headers);
     const platformRule = detected || PLATFORM_RULES[0];
@@ -351,10 +380,10 @@ router.post('/ai-map', upload.single('file'), async (req, res, next) => {
 // POST /api/platform-import/preview — 上传CSV预览
 router.post('/preview', upload.single('file'), async (req, res, next) => {
   try {
-    if (!req.file) return res.status(400).json({ error: '请上传CSV文件' });
+    if (!req.file) return res.status(400).json({ error: '请上传 CSV 或 Excel 文件' });
 
-    const { headers, rows } = parseCsvBuffer(req.file.buffer);
-    if (!headers.length || !rows.length) return res.status(400).json({ error: 'CSV文件为空或格式不正确' });
+    const { headers, rows } = await parseBuffer(req.file.buffer, req.file.originalname);
+    if (!headers.length || !rows.length) return res.status(400).json({ error: '文件为空或格式不正确' });
 
     const detected = detectPlatform(headers);
     const platform = detected || { platform: 'unknown', name: '未知', fieldMap: {} };
@@ -402,9 +431,9 @@ router.post('/import', upload.single('file'), async (req, res, next) => {
   try {
     const { company_id, period_id, platform, import_as } = req.body;
     if (!company_id || !period_id) return res.status(400).json({ error: '缺少 company_id 或 period_id' });
-    if (!req.file) return res.status(400).json({ error: '请上传CSV文件' });
+    if (!req.file) return res.status(400).json({ error: '请上传 CSV 或 Excel 文件' });
 
-    const { headers, rows } = parseCsvBuffer(req.file.buffer);
+    const { headers, rows } = await parseBuffer(req.file.buffer, req.file.originalname);
     const detected = detectPlatform(headers);
     const platRule = PLATFORM_RULES.find(r => r.platform === (platform || detected?.platform)) || PLATFORM_RULES[0];
     const platPlatform = platRule.platform;
@@ -464,7 +493,7 @@ router.post('/import', upload.single('file'), async (req, res, next) => {
         const vatSales = r2(grossSales - grossSales / (1 + VAT_RATE));
         // Build custom_deductions for unrecognized fees
         const cdItems = [];
-        if (otherFee > 0) cdItems.push({ name: '其他费用(平台)', amount: otherFee, notes: 'CSV导入', is_vat_inclusive: true });
+        if (otherFee > 0) cdItems.push({ name: '其他费用(平台)', amount: otherFee, notes: '文件导入', is_vat_inclusive: true });
         const customDed = cdItems.length > 0 ? JSON.stringify(cdItems) : '[]';
         // Purchases VAT from platform_fees (is_vat_inclusive)
         const vatPurchases = r2((platformFee / (1 + VAT_RATE) * VAT_RATE) + (otherFee / (1 + VAT_RATE) * VAT_RATE));
@@ -500,7 +529,7 @@ router.post('/import', upload.single('file'), async (req, res, next) => {
     );
 
     logAudit({ company_id: parseInt(company_id), action: 'import', entity_type: 'platform_csv',
-      description: `${platRule.name} CSV导入: ${success}成功/${failed}失败`, new_value: { platform: platPlatform, success, failed }, req });
+      description: `${platRule.name} 文件导入: ${success}成功/${failed}失败`, new_value: { platform: platPlatform, success, failed }, req });
 
     res.json({ success: true, platform: platPlatform, total_rows: rows.length, success_rows: success, failed_rows: failed, errors, import_id: importId });
   } catch (e) { next(e); }
