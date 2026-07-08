@@ -181,11 +181,14 @@ router.get('/vat-report', async (req, res, next) => {
     let salesAmount = r2(outSum.rows[0].ex);
     let vatSales = r2(outSum.rows[0].vat);
     let vatPurchases = r2(inSum.rows[0].vat);
+    let fromDetails = parseInt(outSum.rows[0].cnt) > 0;
 
+    let grossSales = 0;
     if (parseInt(outSum.rows[0].cnt) === 0) {
       const sales = await pool.query('SELECT * FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
       if (sales.rows.length > 0) {
         let totalNetSales = 0;
+        grossSales = sumFields(sales.rows, 'platform_sales');
         for (const r of sales.rows) {
           const gross = parseFloat(r.platform_sales || 0) - parseFloat(r.platform_refunds || 0);
           const inclusive = r.is_vat_inclusive !== false;
@@ -196,16 +199,35 @@ router.get('/vat-report', async (req, res, next) => {
         vatSales = sumFields(sales.rows, 'vat_sales_calculated');
         vatPurchases = sumFields(sales.rows, 'vat_purchases_calculated');
       }
+    } else {
+      // When from details, also compute gross sales estimate
+      const sales = await pool.query('SELECT COALESCE(SUM(platform_sales),0) AS gs FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
+      grossSales = r2(sales.rows[0]?.gs || 0);
     }
 
     const { year, month } = period.rows[0];
     let prevMonth = month - 1, prevYear = year;
     if (prevMonth < 1) { prevMonth = 12; prevYear--; }
+
+    // Get credit forward from previous period's saved vat_reports
     const prev = await pool.query(
       `SELECT vat_credit_carry FROM vat_reports vr JOIN accounting_periods ap ON ap.id=vr.period_id WHERE vr.company_id=$1 AND ap.year=$2 AND ap.month=$3`,
       [company_id, prevYear, prevMonth]
     );
     const creditForward = prev.rows.length > 0 ? r2(prev.rows[0].vat_credit_carry) : 0;
+
+    // Get saved status for current period
+    const saved = await pool.query(
+      `SELECT vr.* FROM vat_reports vr JOIN accounting_periods ap ON ap.id=vr.period_id WHERE vr.company_id=$1 AND ap.year=$2 AND ap.month=$3`,
+      [company_id, year, month]
+    );
+    const savedRecord = saved.rows[0] || null;
+    const filingStatus = savedRecord ? savedRecord.status : 'pending';
+
+    // VAT deadline: 23rd of next month
+    let deadlineMonth = month + 1, deadlineYear = year;
+    if (deadlineMonth > 12) { deadlineMonth = 1; deadlineYear++; }
+    const deadline = `${deadlineYear}-${String(deadlineMonth).padStart(2,'0')}-23`;
 
     const net = vatSales - vatPurchases - creditForward;
     const payable = net > 0 ? r2(net) : 0;
@@ -215,11 +237,16 @@ router.get('/vat-report', async (req, res, next) => {
       company_id: parseInt(company_id),
       period: period.rows[0],
       sales_amount: salesAmount,
+      gross_sales: grossSales,
       vat_sales: vatSales,
       vat_purchases: vatPurchases,
       credit_forward: creditForward,
       vat_payable: payable,
       vat_credit_carry: carry,
+      from_details: fromDetails,
+      deadline: deadline,
+      status: filingStatus,
+      saved: savedRecord,
     });
   } catch (err) { next(err); }
 });
