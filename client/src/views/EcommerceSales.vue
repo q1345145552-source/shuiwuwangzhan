@@ -150,6 +150,7 @@
             <el-button link type="danger" size="small" @click="customDeductions.splice(idx,1)">删除</el-button>
           </div>
         </div>
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
           <div style="flex:1;min-width:200px">
             <el-input v-model="form.notes" placeholder="备注…" size="small" />
           </div>
