@@ -244,9 +244,8 @@ router.get('/balance-sheet', async (req, res, next) => {
       });
     }
 
-    const s = sales.rows[0];
-    // Simplified balance sheet from ecommerce data
-    const cash = r2(parseFloat(s.platform_sales) - parseFloat(s.platform_refunds) - parseFloat(s.cost_of_goods) - parseFloat(s.platform_fees) - parseFloat(s.rental_fees) - parseFloat(s.salary_fees) - parseFloat(s.warehouse_fees) - parseFloat(s.other_expenses) - parseFloat(s.advertising_fees) - parseFloat(s.shipping_fees));
+    const sum = (f) => sales.rows.reduce((s, r) => s + parseFloat(r[f] || 0), 0);
+    const cash = r2(sum('platform_sales') - sum('platform_refunds') - sum('cost_of_goods') - sum('platform_fees') - sum('rental_fees') - sum('salary_fees') - sum('warehouse_fees') - sum('other_expenses') - sum('advertising_fees') - sum('shipping_fees'));
     const totalAssets = cash;
 
     res.json({

@@ -27,8 +27,9 @@ router.post('/check-sales-vat', async (req, res, next) => {
         'SELECT platform_sales, platform_refunds FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2',
         [company_id, m.id]
       );
-      const s = sales.rows[0] || { platform_sales: 0, platform_refunds: 0 };
-      const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0))  / (1 + VAT_RATE));
+      const totalSales = sales.rows.reduce((s, r) => s + parseFloat(r.platform_sales || 0), 0);
+      const totalRefunds = sales.rows.reduce((s, r) => s + parseFloat(r.platform_refunds || 0), 0);
+      const netSales = r2((totalSales - totalRefunds) / (1 + VAT_RATE));
       const vatExpected = r2(netSales * VAT_RATE);
 
       // 从 vat_output_details 取已申报销项
@@ -201,8 +202,9 @@ router.post('/full-check', async (req, res, next) => {
     for (const m of months) {
       const sales = await pool.query(
         'SELECT platform_sales, platform_refunds FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2', [company_id, m.id]);
-      const s = sales.rows[0] || { platform_sales: 0, platform_refunds: 0 };
-      const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0))  / (1 + VAT_RATE));
+      const totalSales = sales.rows.reduce((s, r) => s + parseFloat(r.platform_sales || 0), 0);
+      const totalRefunds = sales.rows.reduce((s, r) => s + parseFloat(r.platform_refunds || 0), 0);
+      const netSales = r2((totalSales - totalRefunds) / (1 + VAT_RATE));
       const vatExpected = r2(netSales * VAT_RATE);
       const vatRes = await pool.query(
         'SELECT COALESCE(SUM(vat_amount),0) as vr FROM vat_output_details WHERE company_id=$1 AND period_id=$2', [company_id, m.id]);

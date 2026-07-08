@@ -78,8 +78,9 @@ router.post('/generate', async (req, res, next) => {
           'SELECT platform_sales, platform_refunds FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2',
           [company_id, pid]
         );
-        const s = salesRes.rows[0] || { platform_sales: 0, platform_refunds: 0 };
-        const netSales = r2(((s.platform_sales || 0) - (s.platform_refunds || 0))  / (1 + VAT_RATE));
+        const totalSales = salesRes.rows.reduce((s, r) => s + parseFloat(r.platform_sales || 0), 0);
+        const totalRefunds = salesRes.rows.reduce((s, r) => s + parseFloat(r.platform_refunds || 0), 0);
+        const netSales = r2((totalSales - totalRefunds) / (1 + VAT_RATE));
         const expectedVat = r2(netSales * VAT_RATE);
 
         const vatRes = await pool.query(
