@@ -80,7 +80,6 @@ const ecommerceSaleSchema = Joi.object({
   vat_rate: Joi.number().min(0).max(1).allow(null),
   actual_received: Joi.number().min(0).allow(null),
   collection_status: Joi.string().valid('uncollected','partial','collected').allow(''),
-  tax_invoice_issued: Joi.boolean().allow(null),
   notes: Joi.string().allow('').max(1000),
   custom_deductions: Joi.alternatives().try(Joi.array(), Joi.string()).allow(null),
 });

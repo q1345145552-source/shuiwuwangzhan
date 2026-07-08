@@ -150,12 +150,6 @@
             <el-button link type="danger" size="small" @click="customDeductions.splice(idx,1)">删除</el-button>
           </div>
         </div>
-        <!-- 开票 + 备注 + 按钮 -->
-        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-          <div>
-            <span style="font-size:12px;color:#666;margin-right:4px">已开 Tax Invoice</span>
-            <el-switch v-model="form.tax_invoice_issued" size="small" />
-          </div>
           <div style="flex:1;min-width:200px">
             <el-input v-model="form.notes" placeholder="备注…" size="small" />
           </div>
@@ -205,9 +199,6 @@
               <el-tag size="small" v-else-if="row.collection_status==='partial'" type="warning">部分</el-tag>
               <el-tag size="small" v-else type="info">未回款</el-tag>
             </template>
-          </el-table-column>
-          <el-table-column label="开票" width="50">
-            <template #default="{row}"><span v-if="row.tax_invoice_issued" style="color:#67c23a">是</span><span v-else>否</span></template>
           </el-table-column>
           <el-table-column label="操作" width="100" fixed="right">
             <template #default="{row}">
@@ -275,7 +266,7 @@ const emptyForm = () => ({
   wht_deducted: null, campaign_fee: null, affiliate_commission: null, cod_fee: null,
   cost_of_goods: null, rental_fees: null, salary_fees: null, warehouse_fees: null, other_expenses: null,
   import_vat_paid: null, import_duty_paid: null,
-  actual_received: null, collection_status: 'uncollected', tax_invoice_issued: false, notes: '',
+  actual_received: null, collection_status: 'uncollected', notes: '',
   custom_deductions: [],
 })
 
@@ -355,7 +346,6 @@ const editRecord = (row) => {
     import_duty_paid: parseFloat(row.import_duty_paid) || null,
     actual_received: parseFloat(row.actual_received) || null,
     collection_status: row.collection_status || 'uncollected',
-    tax_invoice_issued: row.tax_invoice_issued === true,
     notes: row.notes || '',
     custom_deductions: [],
   }

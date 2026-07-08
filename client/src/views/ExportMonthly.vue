@@ -37,13 +37,12 @@
 </template>
 
 <script setup>
-const store = useCompanyStore()
-
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
 import { useCompanyStore } from '../stores/currentCompany'
-import { downloadFile, openPdf } from '../api/download'
+import { downloadFile } from '../api/download'
+const store = useCompanyStore()
 
 const companies = ref([])
 const periods = ref([])
@@ -52,8 +51,9 @@ const selectedPeriodId = ref(null)
 const packageLoading = ref(false)
 
 const reportItems = ref([
-  { key: 'profit-loss', label: '利润表', desc: '月度营收、成本、费用与净利润（电商简化版）' },
+  { key: 'profit-loss', label: '利润表', desc: '月度营收、成本、费用与净利润' },
   { key: 'vat-report', label: 'VAT 申报表', desc: 'P.P.30 增值税申报简表' },
+  { key: 'ecommerce-sales/xlsx', label: '电商销售明细', desc: '本期所有订单的销售、扣费、回款明细（Excel）' },
 ])
 
 const fetchCompanies = async () => {
@@ -65,11 +65,15 @@ const onCompanyChange = () => { selectedPeriodId.value = null; fetchPeriods() }
 const downloadReport = async (item) => {
   item.loading = true
   try {
-    const res = await api.get(`/export/${item.key}`, {
-      params: { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value },
-    })
-    window.open(res.url, '_blank')
-    ElMessage.success(`${item.label} 已生成`)
+    const params = { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value }
+    if (item.key.endsWith('/xlsx')) {
+      await downloadFile(`/api/export/${item.key}`, `${item.key.replace('/','_')}.xlsx`, params)
+      ElMessage.success(`${item.label} 已导出`)
+    } else {
+      const res = await api.get(`/export/${item.key}`, { params })
+      window.open(res.url, '_blank')
+      ElMessage.success(`${item.label} 已生成`)
+    }
   } catch { ElMessage.error('导出失败') } finally { item.loading = false }
 }
 

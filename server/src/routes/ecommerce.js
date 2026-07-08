@@ -16,8 +16,7 @@ function parseBody(body) {
   v.is_vat_inclusive = body.is_vat_inclusive !== false;
   v.vat_rate = parseFloat(body.vat_rate) || VAT_RATE;
   v.collection_status = body.collection_status || 'uncollected';
-  v.tax_invoice_issued = body.tax_invoice_issued === true;
-  const gross = v.platform_sales - v.platform_refunds;
+    const gross = v.platform_sales - v.platform_refunds;
   if (v.is_vat_inclusive) {
     v.vat_sales_calculated = Math.round((gross - gross / (1 + v.vat_rate)) * 100) / 100;
   } else {
@@ -51,10 +50,10 @@ router.post('/sales', checkPeriodLock, validate(ecommerceSaleSchema), async (req
     const { company_id, period_id } = req.body;
     if (!company_id || !period_id) return res.status(400).json({ error: '缺少 company_id 或 period_id' });
     const v = parseBody(req.body);
-    const fields = [...TXT_FIELDS, ...NUM_FIELDS, 'is_vat_inclusive','vat_rate','collection_status','tax_invoice_issued','vat_sales_calculated','vat_purchases_calculated'];
+    const fields = [...TXT_FIELDS, ...NUM_FIELDS, 'is_vat_inclusive','vat_rate','collection_status','vat_sales_calculated','vat_purchases_calculated'];
     const cols = [...fields, 'custom_deductions', 'company_id', 'period_id'];
     const ph = cols.map((_, i) => `$${i+1}`).join(',');
-    const vals = [...TXT_FIELDS.map(k => v[k]), ...NUM_FIELDS.map(k => v[k]), v.is_vat_inclusive, v.vat_rate, v.collection_status, v.tax_invoice_issued, v.vat_sales_calculated, v.vat_purchases_calculated, v.custom_deductions, company_id, period_id];
+    const vals = [...TXT_FIELDS.map(k => v[k]), ...NUM_FIELDS.map(k => v[k]), v.is_vat_inclusive, v.vat_rate, v.collection_status, v.vat_sales_calculated, v.vat_purchases_calculated, v.custom_deductions, company_id, period_id];
     const r = await pool.query(`INSERT INTO ecommerce_sales (${cols.join(',')}) VALUES (${ph}) RETURNING *`, vals);
     logAudit({ company_id, action: 'create', entity_type: 'ecommerce_sales', entity_id: r.rows[0].id, description: '新增销售记录', new_value: v, req });
     res.status(201).json(r.rows[0]);
@@ -74,7 +73,7 @@ router.put('/sales/:id', checkPeriodLock, validate(ecommerceSaleSchema), async (
       'platform_fees=$11','advertising_fees=$12','shipping_fees=$13','cost_of_goods=$14',
       'rental_fees=$15','salary_fees=$16','warehouse_fees=$17','other_expenses=$18',
       'import_vat_paid=$19','import_duty_paid=$20','actual_received=$21',
-      'is_vat_inclusive=$22','vat_rate=$23','collection_status=$24','tax_invoice_issued=$25',
+      'is_vat_inclusive=$22','vat_rate=$23','collection_status=$24',
       'vat_sales_calculated=$26','vat_purchases_calculated=$27','custom_deductions=$28',
     ];
     const vals = [
@@ -83,7 +82,7 @@ router.put('/sales/:id', checkPeriodLock, validate(ecommerceSaleSchema), async (
       v.platform_fees, v.advertising_fees, v.shipping_fees, v.cost_of_goods,
       v.rental_fees, v.salary_fees, v.warehouse_fees, v.other_expenses,
       v.import_vat_paid, v.import_duty_paid, v.actual_received,
-      v.is_vat_inclusive, v.vat_rate, v.collection_status, v.tax_invoice_issued,
+      v.is_vat_inclusive, v.vat_rate, v.collection_status,
       v.vat_sales_calculated, v.vat_purchases_calculated, v.custom_deductions,
       id,
     ];
