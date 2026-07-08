@@ -601,6 +601,102 @@ router.get('/vat-details/xlsx', async (req, res, next) => {
   } catch(e) { next(e); }
 });
 
+// ---- VAT 来源追溯 Excel ----
+router.get('/vat-source-trace/xlsx', async (req, res, next) => {
+  try {
+    const { company_id, period_id } = req.query;
+    const [comp, per] = await Promise.all([
+      pool.query('SELECT * FROM companies WHERE id=$1',[company_id]),
+      pool.query('SELECT * FROM accounting_periods WHERE id=$1',[period_id])
+    ]);
+    const p = per.rows[0] || {};
+
+    // Re-implement the source trace logic inline (no HTTP self-call)
+    const [outDetails, inDetails, expDetails, allSales] = await Promise.all([
+      pool.query('SELECT * FROM vat_output_details WHERE company_id=$1 AND period_id=$2 ORDER BY invoice_date',[company_id,period_id]),
+      pool.query('SELECT * FROM vat_input_details WHERE company_id=$1 AND period_id=$2 ORDER BY invoice_date',[company_id,period_id]),
+      pool.query("SELECT * FROM expense_details WHERE company_id=$1 AND period_id=$2 AND vat_amount > 0 ORDER BY expense_date",[company_id,period_id]),
+      pool.query('SELECT * FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2 ORDER BY order_date, id',[company_id,period_id]),
+    ]);
+
+    const wb = new ExcelJS.Workbook();
+    const name = comp.rows[0]?.name || '';
+    const title = name + ' - ' + p.year + '年' + p.month + '月';
+
+    // Sheet 1: 销项来源
+    const ws1 = wb.addWorksheet('销项VAT来源');
+    ws1.mergeCells('A1:J1'); ws1.getCell('A1').value = title + ' 销项VAT来源';
+    const h1 = ws1.addRow(['来源','平台','订单日期','订单号','含税金额','未税金额','销项VAT','客户','说明','记录ID']);
+    h1.font = {bold:true}; h1.eachCell(c=>c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F0FE'}});
+    let outTotal = 0;
+    if (outDetails.rows.length > 0) {
+      outDetails.rows.forEach(r => {
+        ws1.addRow([r.source||'manual','',r.invoice_date||'',r.invoice_no||'',fmt(r.total_amount),fmt(r.amount_ex_vat),fmt(r.vat_amount),r.customer_name||'',r.description||'',r.id]);
+        outTotal += toNum(r.vat_amount);
+      });
+    } else {
+      allSales.rows.forEach(r => {
+        const g = parseFloat(r.platform_sales || 0);
+        const inc = r.is_vat_inclusive !== false;
+        const rate = parseFloat(r.vat_rate) || VAT_RATE;
+        const net = inc ? r2(g / (1 + rate)) : r2(g);
+        const vat = r2(r.vat_sales_calculated);
+        ws1.addRow(['电商销售','',r.order_date||'',r.order_no||'',fmt(g),fmt(net),fmt(vat),'',r.notes||'',r.id]);
+        outTotal += toNum(vat);
+      });
+    }
+    const sr1 = ws1.addRow(['合计','','','','','',fmt(outTotal),'','','']);
+    sr1.font = {bold:true}; sr1.eachCell(c=>c.border={top:{style:'double'}});
+
+    // Sheet 2: 进项来源
+    const ws2 = wb.addWorksheet('进项VAT来源');
+    ws2.mergeCells('A1:K1'); ws2.getCell('A1').value = title + ' 进项VAT来源';
+    const h2 = ws2.addRow(['来源','类别','供应商','日期','含税金额','未税金额','进项VAT','可抵扣','不可抵扣原因','说明','记录ID']);
+    h2.font = {bold:true}; h2.eachCell(c=>c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F0FE'}});
+    let inDed = 0, inNon = 0, inAll = 0;
+    const addInRow = (src, cat, sup, dt, g, n, v, ded, reason, desc, rid) => {
+      ws2.addRow([src,cat,sup,dt,fmt(g),fmt(n),fmt(v),ded?'是':'否',reason,desc,rid]);
+      inAll += toNum(v);
+      ded ? inDed += toNum(v) : inNon += toNum(v);
+    };
+    inDetails.rows.forEach(r => addInRow('VAT明细',r.category||'',r.supplier_name||'',r.invoice_date||'',r.total_amount,r.amount_ex_vat,r.vat_amount,r.deductible===true,r.deductible===false?'手动标记':'',r.description||'',r.id));
+    expDetails.rows.forEach(r => addInRow('费用管理',r.category||'',r.payee_name||'',r.expense_date||'',r.total_amount,r.amount,r.vat_amount,true,'',r.description||'',r.id));
+    for (const s of allSales.rows) {
+      if (toNum(s.import_vat_paid) > 0) addInRow('进口VAT','import','海关',s.order_date||'',s.import_vat_paid,r2(s.import_vat_paid/(1+VAT_RATE)),s.import_vat_paid,true,'','进口清关',s.id);
+      let cdArr = [];
+      try { cdArr = typeof s.custom_deductions === 'string' ? JSON.parse(s.custom_deductions) : (s.custom_deductions || []); } catch(e) {}
+      if (!Array.isArray(cdArr)) cdArr = [];
+      cdArr.forEach(cd => {
+        const amt = toNum(cd.amount); if (amt <= 0) return;
+        const inclusive = cd.is_vat_inclusive !== false;
+        const netAmt = inclusive ? r2(amt / (1 + VAT_RATE)) : r2(amt);
+        const vatAmt = inclusive ? r2(amt - netAmt) : 0;
+        addInRow('自定义扣费',cd.name||'','',s.order_date||'',amt,netAmt,vatAmt,inclusive,inclusive?'':'未含税不可抵扣',cd.notes||'',s.id);
+      });
+    }
+    const sr2a = ws2.addRow(['可抵扣合计','','','','',fmt(inDed),'','','','','']);
+    const sr2b = ws2.addRow(['不可抵扣合计','','','','',fmt(inNon),'','','','','']);
+    const sr2c = ws2.addRow(['进项合计','','','','',fmt(inAll),'','','','','']);
+    [sr2a,sr2b,sr2c].forEach(r=>{r.font={bold:true};r.eachCell(c=>c.border={top:{style:'double'}});});
+
+    // Sheet 3: 汇总
+    const ws3 = wb.addWorksheet('汇总');
+    ws3.addRow(['项目','金额']).font = {bold:true};
+    ws3.addRow(['销项VAT合计',fmt(outTotal)]);
+    ws3.addRow(['可抵扣进项VAT',fmt(inDed)]);
+    ws3.addRow(['不可抵扣进项VAT',fmt(inNon)]);
+    ws3.addRow(['进项VAT合计',fmt(inAll)]);
+
+    ws1.columns.forEach((c,i)=>{const w=[12,10,12,15,14,14,12,12,20,10][i]||10;c.width=w});
+    ws2.columns.forEach((c,i)=>{const w=[16,10,16,12,14,14,12,8,14,20,10][i]||10;c.width=w});
+    ws3.getColumn(1).width = 25; ws3.getColumn(2).width = 20;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=vat_source_trace_'+p.year+String(p.month).padStart(2,'0')+'.xlsx');
+    await wb.xlsx.write(res); res.end();
+  } catch(e) { next(e); }
+});
+
 router.get('/all/xlsx', async (req, res, next) => {
   try {
     const { company_id, period_id } = req.query;

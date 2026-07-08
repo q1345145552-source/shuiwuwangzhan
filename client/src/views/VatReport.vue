@@ -6,7 +6,7 @@
         <span style="font-weight:bold;font-size:16px">VAT 指挥中心</span>
         <CompanyPeriodSelector
           v-model:company-id="selectedCompanyId" v-model:period-id="selectedPeriodId"
-          @company-change="onCompanyChange" @period-change="fetchReport"
+          @company-change="onCompanyChange" @period-change="fetchAll"
         />
         <el-button type="primary" :disabled="!report" @click="saveReport" :loading="saving">
           {{ report?.status === 'submitted' ? '已申报' : '保存' }}
@@ -18,7 +18,6 @@
 
     <el-skeleton v-if="loading" :rows="8" animated style="padding:16px" />
 
-    <!-- 总览卡片 -->
     <template v-if="report">
       <!-- 数据来源提示 -->
       <el-alert
@@ -94,7 +93,128 @@
         </el-table>
       </el-card>
 
-      <!-- 老板友好说明 -->
+      <!-- VAT 来源追溯 -->
+      <el-card style="margin-top:16px">
+        <template #header>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-weight:bold;font-size:15px">VAT 来源追溯</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <el-tag v-if="traceLoading" size="small" type="info">加载中</el-tag>
+              <el-button size="small" @click="fetchTrace" :loading="traceLoading" :disabled="!selectedPeriodId">刷新</el-button>
+              <el-button size="small" @click="exportTraceXlsx" :disabled="!traceData">导出 Excel</el-button>
+            </div>
+          </div>
+        </template>
+
+        <template v-if="!traceData">
+          <div style="text-align:center;padding:20px;color:#909399">
+            <p>点击"刷新"加载 VAT 来源明细</p>
+          </div>
+        </template>
+        <template v-else>
+          <!-- 来源汇总 -->
+          <el-row :gutter="16" style="margin-bottom:16px">
+            <el-col :span="6">
+              <div style="background:#f0f9eb;border-radius:6px;padding:12px;text-align:center">
+                <div style="font-size:12px;color:#909399">销项 VAT 来源合计</div>
+                <div style="font-size:20px;font-weight:bold;color:#67c23a">{{ fmt(traceData.summary.output_vat_total) }}</div>
+                <div style="font-size:11px;color:#909399">{{ traceData.summary.output_record_count }} 条记录</div>
+              </div>
+            </el-col>
+            <el-col :span="6">
+              <div style="background:#ecf5ff;border-radius:6px;padding:12px;text-align:center">
+                <div style="font-size:12px;color:#909399">可抵扣进项 VAT</div>
+                <div style="font-size:20px;font-weight:bold;color:#409eff">{{ fmt(traceData.summary.input_vat_deductible) }}</div>
+                <div style="font-size:11px;color:#909399">计入申报</div>
+              </div>
+            </el-col>
+            <el-col :span="6">
+              <div style="background:#fef0f0;border-radius:6px;padding:12px;text-align:center">
+                <div style="font-size:12px;color:#909399">不可抵扣进项 VAT</div>
+                <div style="font-size:20px;font-weight:bold;color:#f56c6c">{{ fmt(traceData.summary.input_vat_non_deductible) }}</div>
+                <div style="font-size:11px;color:#909399">不计入申报</div>
+              </div>
+            </el-col>
+            <el-col :span="6">
+              <div style="background:#f5f7fa;border-radius:6px;padding:12px;text-align:center">
+                <div style="font-size:12px;color:#909399">进项 VAT 合计</div>
+                <div style="font-size:20px;font-weight:bold;color:#303133">{{ fmt(traceData.summary.input_vat_total) }}</div>
+                <div style="font-size:11px;color:#909399">{{ traceData.summary.input_record_count }} 条记录</div>
+              </div>
+            </el-col>
+          </el-row>
+
+          <!-- Tab 切换 -->
+          <el-tabs v-model="traceTab">
+            <el-tab-pane label="销项 VAT 来源" name="output">
+              <el-table :data="filteredOutputSources" border size="small" max-height="400" style="width:100%">
+                <el-table-column prop="source_label" label="来源" width="130" />
+                <el-table-column prop="platform" label="平台" width="80" />
+                <el-table-column prop="order_date" label="日期" width="110" />
+                <el-table-column prop="order_no" label="订单号" min-width="130" />
+                <el-table-column label="含税金额" width="120" align="right">
+                  <template #default="{row}">{{ fmt(row.gross_amount) }}</template>
+                </el-table-column>
+                <el-table-column label="未税金额" width="120" align="right">
+                  <template #default="{row}">{{ fmt(row.net_amount) }}</template>
+                </el-table-column>
+                <el-table-column label="销项 VAT" width="110" align="right">
+                  <template #default="{row}">
+                    <span style="font-weight:bold;color:#e6a23c">{{ fmt(row.vat_amount) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="customer_name" label="客户" width="80" />
+                <el-table-column prop="description" label="说明" min-width="150" show-overflow-tooltip />
+              </el-table>
+              <div v-if="traceData.output_sources.length" style="margin-top:8px;color:#909399;font-size:12px">
+                销项 VAT 不可直接修改。如需更正，请到「电商销售录入」或「VAT 明细」模块调整原始数据。
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="进项 VAT 来源" name="input">
+              <!-- 筛选 -->
+              <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+                <el-select v-model="inputFilter.source_type" placeholder="来源类型" clearable size="small" style="width:160px">
+                  <el-option label="全部" value="" />
+                  <el-option v-for="(v, k) in traceData.breakdown.input_by_source" :key="k" :label="k" :value="k" />
+                </el-select>
+                <el-checkbox v-model="inputFilter.only_deductible" size="small">仅显示可抵扣</el-checkbox>
+              </div>
+
+              <el-table :data="filteredInputSources" border size="small" max-height="400" style="width:100%">
+                <el-table-column prop="source_label" label="来源" width="140" />
+                <el-table-column prop="category" label="类别" width="100" />
+                <el-table-column prop="supplier_name" label="供应商" width="120" />
+                <el-table-column prop="date" label="日期" width="110" />
+                <el-table-column label="含税金额" width="120" align="right">
+                  <template #default="{row}">{{ fmt(row.gross_amount) }}</template>
+                </el-table-column>
+                <el-table-column label="未税金额" width="120" align="right">
+                  <template #default="{row}">{{ fmt(row.net_amount) }}</template>
+                </el-table-column>
+                <el-table-column label="进项 VAT" width="110" align="right">
+                  <template #default="{row}">
+                    <span :style="{fontWeight:'bold',color:row.deductible?'#409eff':'#c0c4cc'}">{{ fmt(row.vat_amount) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="可抵扣" width="70" align="center">
+                  <template #default="{row}">
+                    <el-tag v-if="row.deductible" type="success" size="small">是</el-tag>
+                    <el-tag v-else type="info" size="small">否</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="non_deductible_reason" label="不可抵扣原因" width="160" show-overflow-tooltip />
+                <el-table-column prop="description" label="说明" min-width="120" show-overflow-tooltip />
+              </el-table>
+              <div v-if="traceData.input_sources.length" style="margin-top:8px;color:#909399;font-size:12px">
+                进项 VAT 不可直接修改。如需更正，请到「费用管理」「电商销售录入」或「VAT 明细」模块调整原始数据。
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </template>
+      </el-card>
+
+      <!-- 指标说明 -->
       <el-card style="margin-top:16px">
         <template #header><span style="font-weight:bold">指标说明</span></template>
         <div style="font-size:13px;color:#606266;line-height:2">
@@ -124,6 +244,11 @@ const loading = ref(false)
 const saving = ref(false)
 const exportLoading = ref(false)
 
+const traceData = ref(null)
+const traceLoading = ref(false)
+const traceTab = ref('output')
+const inputFilter = ref({ source_type: '', only_deductible: false })
+
 function fmt(n) {
   if (n == null) return '0.00'
   return (Math.round(n * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })
@@ -144,6 +269,23 @@ const vatRows = computed(() => {
   ]
 })
 
+const filteredOutputSources = computed(() => {
+  if (!traceData.value) return []
+  return traceData.value.output_sources
+})
+
+const filteredInputSources = computed(() => {
+  if (!traceData.value) return []
+  let list = traceData.value.input_sources
+  if (inputFilter.value.source_type) {
+    list = list.filter(r => r.source_label === inputFilter.value.source_type)
+  }
+  if (inputFilter.value.only_deductible) {
+    list = list.filter(r => r.deductible)
+  }
+  return list
+})
+
 const fetchReport = async () => {
   if (!selectedPeriodId.value) return
   loading.value = true
@@ -154,7 +296,22 @@ const fetchReport = async () => {
   } catch (e) { ElMessage.error('加载失败') } finally { loading.value = false }
 }
 
-const onCompanyChange = () => { selectedPeriodId.value = null; report.value = null }
+const fetchTrace = async () => {
+  if (!selectedPeriodId.value) return
+  traceLoading.value = true
+  try {
+    traceData.value = await api.get('/vat-report/source-trace', {
+      params: { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value }
+    })
+  } catch (e) { ElMessage.error('来源追溯加载失败') } finally { traceLoading.value = false }
+}
+
+const fetchAll = () => {
+  fetchReport()
+  fetchTrace()
+}
+
+const onCompanyChange = () => { selectedPeriodId.value = null; report.value = null; traceData.value = null }
 
 const saveReport = async () => {
   saving.value = true
@@ -194,7 +351,11 @@ function exportXlsx() {
   downloadFile('/api/export/vat-report/xlsx', 'vat_report.xlsx', { company_id: cid, period_id: pid })
 }
 
-onMounted(() => { /* CompanyPeriodSelector handles loading */ })
+function exportTraceXlsx() {
+  const cid = selectedCompanyId.value, pid = selectedPeriodId.value
+  if (!pid || !cid) return
+  downloadFile('/api/export/vat-source-trace/xlsx', 'vat_source_trace.xlsx', { company_id: cid, period_id: pid })
+}
 </script>
 
 <style scoped>

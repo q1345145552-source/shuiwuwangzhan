@@ -251,6 +251,212 @@ router.get('/vat-report', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ==================== VAT 来源追溯 ====================
+router.get('/vat-report/source-trace', async (req, res, next) => {
+  try {
+    const { company_id, period_id } = req.query;
+    if (!company_id || !period_id) return res.status(400).json({ error: '缺少参数' });
+
+    const period = await pool.query('SELECT year, month FROM accounting_periods WHERE id = $1', [period_id]);
+    if (period.rows.length === 0) return res.status(404).json({ error: '期间不存在' });
+
+    // ── 销项 VAT 来源 ──
+    const outDetails = await pool.query(
+      'SELECT * FROM vat_output_details WHERE company_id=$1 AND period_id=$2 ORDER BY invoice_date',
+      [company_id, period_id]
+    );
+
+    let outputSources = [];
+    if (outDetails.rows.length > 0) {
+      outputSources = outDetails.rows.map(r => ({
+        source_type: r.source || 'manual',
+        source_label: r.source === 'shopee' ? '平台导入(Shopee)' : r.source === 'lazada' ? '平台导入(Lazada)' : r.source === 'tiktok' ? '平台导入(TikTok)' : '手工录入',
+        platform: r.source || '',
+        store_name: '',
+        order_date: r.invoice_date || '',
+        order_no: r.invoice_no || '',
+        gross_amount: r2(r.total_amount),
+        net_amount: r2(r.amount_ex_vat),
+        vat_amount: r2(r.vat_amount),
+        customer_name: r.customer_name || '',
+        description: r.description || '',
+        record_id: r.id,
+      }));
+    } else {
+      // Fallback: 电商销售记录
+      const sales = await pool.query(
+        'SELECT * FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2 ORDER BY order_date, id',
+        [company_id, period_id]
+      );
+      outputSources = sales.rows.map(r => {
+        const gross = parseFloat(r.platform_sales || 0);
+        const inclusive = r.is_vat_inclusive !== false;
+        const rate = parseFloat(r.vat_rate) || VAT_RATE;
+        const net = inclusive ? r2(gross / (1 + rate)) : r2(gross);
+        return {
+          source_type: 'ecommerce',
+          source_label: '电商销售估算',
+          platform: r.platform || '',
+          store_name: r.store_name || '',
+          order_date: r.order_date || '',
+          order_no: r.order_no || '',
+          gross_amount: r2(gross),
+          net_amount: net,
+          vat_amount: r2(r.vat_sales_calculated),
+          customer_name: '',
+          description: r.notes || '',
+          record_id: r.id,
+        };
+      });
+    }
+
+    // ── 进项 VAT 来源 ──
+    const inputSources = [];
+
+    // 1. VAT 进项明细表 (vat_input_details)
+    const inDetails = await pool.query(
+      'SELECT * FROM vat_input_details WHERE company_id=$1 AND period_id=$2 ORDER BY invoice_date',
+      [company_id, period_id]
+    );
+    for (const r of inDetails.rows) {
+      inputSources.push({
+        source_type: 'vat_input_detail',
+        source_label: 'VAT进项明细',
+        category: r.category || '',
+        supplier_name: r.supplier_name || '',
+        date: r.invoice_date || '',
+        invoice_no: r.invoice_no || '',
+        gross_amount: r2(r.total_amount),
+        net_amount: r2(r.amount_ex_vat),
+        vat_amount: r2(r.vat_amount),
+        deductible: r.deductible === true,
+        non_deductible_reason: r.deductible === false ? '手动标记为不可抵扣' : '',
+        description: r.description || '',
+        record_id: r.id,
+      });
+    }
+
+    // 2. 费用管理明细 (expense_details) — 仅取有VAT的
+    const expDetails = await pool.query(
+      "SELECT * FROM expense_details WHERE company_id=$1 AND period_id=$2 AND vat_amount > 0 ORDER BY expense_date",
+      [company_id, period_id]
+    );
+    for (const r of expDetails.rows) {
+      inputSources.push({
+        source_type: 'expense',
+        source_label: '费用管理',
+        category: r.category || '',
+        supplier_name: r.payee_name || '',
+        date: r.expense_date || '',
+        invoice_no: '',
+        gross_amount: r2(r.total_amount),
+        net_amount: r2(r.amount),
+        vat_amount: r2(r.vat_amount),
+        deductible: true,
+        non_deductible_reason: '',
+        description: r.description || '',
+        record_id: r.id,
+      });
+    }
+
+    // 3. 电商销售中的含税自定义扣费 — 作为进项VAT来源
+    const salesWithCD = await pool.query(
+      "SELECT * FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2 AND custom_deductions IS NOT NULL AND custom_deductions::text != '[]' ORDER BY order_date, id",
+      [company_id, period_id]
+    );
+    for (const s of salesWithCD.rows) {
+      let cdArr = [];
+      try {
+        cdArr = typeof s.custom_deductions === 'string' ? JSON.parse(s.custom_deductions) : s.custom_deductions;
+      } catch(e) { cdArr = []; }
+      if (!Array.isArray(cdArr)) cdArr = [];
+      for (const cd of cdArr) {
+        const amt = parseFloat(cd.amount) || 0;
+        if (amt <= 0) continue;
+        const inclusive = cd.is_vat_inclusive !== false;
+        const rate = parseFloat(s.vat_rate) || VAT_RATE;
+        const net = inclusive ? r2(amt / (1 + rate)) : r2(amt);
+        const vat = inclusive ? r2(amt - net) : 0;
+        inputSources.push({
+          source_type: 'custom_deduction',
+          source_label: '电商销售自定义扣费',
+          category: cd.name || '自定义扣费',
+          supplier_name: s.platform || '',
+          date: s.order_date || '',
+          invoice_no: s.order_no || '',
+          gross_amount: r2(amt),
+          net_amount: net,
+          vat_amount: vat,
+          deductible: inclusive,
+          non_deductible_reason: inclusive ? '' : '未含税，不可抵扣',
+          description: cd.notes || '',
+          record_id: s.id,
+        });
+      }
+    }
+
+    // 4. 进口 VAT — 从电商销售记录
+    const salesWithImport = await pool.query(
+      'SELECT * FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2 AND import_vat_paid > 0 ORDER BY order_date, id',
+      [company_id, period_id]
+    );
+    for (const s of salesWithImport.rows) {
+      inputSources.push({
+        source_type: 'import_vat',
+        source_label: '进口VAT',
+        category: 'import',
+        supplier_name: '海关',
+        date: s.order_date || '',
+        invoice_no: s.order_no || '',
+        gross_amount: r2(s.import_vat_paid),
+        net_amount: r2(s.import_vat_paid / (1 + VAT_RATE)),
+        vat_amount: r2(s.import_vat_paid),
+        deductible: true,
+        non_deductible_reason: '',
+        description: '进口清关VAT',
+        record_id: s.id,
+      });
+    }
+
+    // 汇总
+    const outputTotal = r2(outputSources.reduce((s, r) => s + r.vat_amount, 0));
+    const inputDeductible = r2(inputSources.filter(r => r.deductible).reduce((s, r) => s + r.vat_amount, 0));
+    const inputNonDeductible = r2(inputSources.filter(r => !r.deductible).reduce((s, r) => s + r.vat_amount, 0));
+    const inputTotal = r2(inputDeductible + inputNonDeductible);
+
+    // Source type stats
+    const outputBySource = {};
+    for (const r of outputSources) {
+      const k = r.source_label;
+      outputBySource[k] = r2((outputBySource[k] || 0) + r.vat_amount);
+    }
+    const inputBySource = {};
+    for (const r of inputSources) {
+      const k = r.source_label;
+      inputBySource[k] = r2((inputBySource[k] || 0) + r.vat_amount);
+    }
+
+    res.json({
+      company_id: parseInt(company_id),
+      period: period.rows[0],
+      output_sources: outputSources,
+      input_sources: inputSources,
+      summary: {
+        output_vat_total: outputTotal,
+        input_vat_deductible: inputDeductible,
+        input_vat_non_deductible: inputNonDeductible,
+        input_vat_total: inputTotal,
+        output_record_count: outputSources.length,
+        input_record_count: inputSources.length,
+      },
+      breakdown: {
+        output_by_source: outputBySource,
+        input_by_source: inputBySource,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 // ==================== 资产负债表 ====================
 router.get('/balance-sheet', async (req, res, next) => {
   try {
