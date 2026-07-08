@@ -18,7 +18,8 @@ const WHT_RATES = {
   royalty:     { name: '特许权',    pnd53: 3,  pnd54: 15 },
   advertising: { name: '广告费',    pnd53: 2,  pnd54: 15 },
   transport:   { name: '运输费',    pnd53: 1,  pnd54: 15 },
-  other:       { name: '其他',      pnd53: 3,  pnd54: 15 },
+  other:          { name: '其他',          pnd53: 3,  pnd54: 15 },
+  ecommerce_wht: { name: '电商平台代扣', pnd53: null, pnd54: null },
 };
 
 // GET /api/wht/rates
@@ -50,6 +51,32 @@ router.post('/calculate', (req, res) => {
     wht_amount: wht,
     net_payment: Math.round((amount - wht) * 100) / 100,
   });
+});
+
+// GET /api/wht/ecommerce-orders?company_id=xx&period_id=xx
+// 从电商销售获取有 WHT 的订单，供导入使用
+router.get('/ecommerce-orders', async (req, res, next) => {
+  try {
+    const { company_id, period_id } = req.query;
+    if (!company_id || !period_id) return res.status(400).json({ error: '缺少 company_id 或 period_id' });
+    const result = await pool.query(
+      "SELECT * FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2 AND COALESCE(wht_deducted,0) > 0 ORDER BY order_date, id",
+      [company_id, period_id]
+    );
+    const orders = result.rows.map(r => ({
+      id: r.id,
+      order_date: r.order_date,
+      order_no: r.order_no,
+      platform: r.platform,
+      store_name: r.store_name,
+      platform_sales: parseFloat(r.platform_sales),
+      wht_deducted: parseFloat(r.wht_deducted || 0),
+      wht_rate: parseFloat(r.platform_sales) > 0
+        ? Math.round((parseFloat(r.wht_deducted || 0) / parseFloat(r.platform_sales)) * 10000) / 100
+        : 0,
+    }));
+    res.json(orders);
+  } catch (err) { next(err); }
 });
 
 // GET /api/wht/reports?company_id=xx&period_id=xx

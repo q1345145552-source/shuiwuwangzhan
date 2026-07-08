@@ -42,7 +42,7 @@
             <el-form label-width="90px" size="small">
               <el-form-item label="付款类型">
                 <el-select v-model="calcForm.payment_type" style="width:100%">
-                  <el-option v-for="r in rateTable" :key="r.payment_type" :label="r.name" :value="r.payment_type" />
+                  <el-option v-for="r in rateOptions" :key="r.payment_type" :label="r.name" :value="r.payment_type" />
                 </el-select>
               </el-form-item>
               <el-form-item label="付款金额">
@@ -80,6 +80,7 @@
                 <el-option label="PND.54" value="pnd54" />
               </el-select>
               <el-button size="small" @click="addDetailRow"><el-icon><Plus /></el-icon> 添加行</el-button>
+              <el-button size="small" type="success" @click="openEcommerceImport" :disabled="!selectedPeriodId">从电商销售导入</el-button>
             </div>
           </div>
         </template>
@@ -104,7 +105,7 @@
           <el-table-column label="付款类型" width="120">
             <template #default="{ row }">
               <el-select v-model="row.payment_type" size="small" @change="onPaymentTypeChange(row)">
-                <el-option v-for="r in rateTable" :key="r.payment_type" :label="r.name" :value="r.payment_type" />
+                <el-option v-for="r in rateOptions" :key="r.payment_type" :label="r.name" :value="r.payment_type" />
               </el-select>
             </template>
           </el-table-column>
@@ -183,6 +184,34 @@
 
     <el-empty v-else description="请选择客户公司和会计期间" />
 
+    <!-- 电商销售导入弹窗 -->
+    <el-dialog v-model="importDialogVisible" title="从电商销售导入预扣税明细" width="750px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px">
+        以下为本期电商销售中有预扣税（WHT）的订单。勾选后点击确认导入，将自动生成预扣税申报明细。
+      </el-alert>
+      <el-table :data="importOrders" border size="small" max-height="400" @selection-change="onImportSelectionChange" ref="importTable">
+        <el-table-column type="selection" width="45" />
+        <el-table-column label="日期" width="100" prop="order_date" />
+        <el-table-column label="订单号" width="100" prop="order_no" />
+        <el-table-column label="平台" width="80" prop="platform" />
+        <el-table-column label="销售额" width="100" align="right">
+          <template #default="{ row }">{{ fmt(row.platform_sales) }}</template>
+        </el-table-column>
+        <el-table-column label="WHT金额" width="100" align="right">
+          <template #default="{ row }">{{ fmt(row.wht_deducted) }}</template>
+        </el-table-column>
+        <el-table-column label="税率" width="60" align="right">
+          <template #default="{ row }">{{ row.wht_rate.toFixed(2) }}%</template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmEcommerceImport" :disabled="importSelected.length === 0">
+          导入选中项（{{ importSelected.length }} 条）
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 明细弹窗 -->
     <el-dialog v-model="detailVisible" title="申报明细" width="800px">
       <el-table :data="viewingDetails" stripe size="small">
@@ -222,11 +251,16 @@ import { useCompanyStore } from '../stores/currentCompany'
 const companies = ref([])
 const periods = ref([])
 const rateTable = ref([])
+const rateOptions = computed(() => rateTable.value.filter(r => r.payment_type !== 'ecommerce_wht'))
 const reports = ref([])
 const detailRows = ref([])
 const viewingDetails = ref([])
 const loadingReports = ref(false)
 const saving = ref(false)
+const importDialogVisible = ref(false)
+const importOrders = ref([])
+const importSelected = ref([])
+const importTable = ref(null)
 const detailVisible = ref(false)
 const selectedCompanyId = ref(null)
 const selectedPeriodId = ref(null)
@@ -272,6 +306,45 @@ const calcWht = (row) => {
 }
 
 const addDetailRow = () => detailRows.value.push(emptyDetail())
+
+const fmt = (v) => (v ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// 从电商销售导入 WHT
+const openEcommerceImport = async () => {
+  importSelected.value = []
+  try {
+    importOrders.value = await api.get('/wht/ecommerce-orders', {
+      params: { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value }
+    })
+    if (importOrders.value.length === 0) {
+      ElMessage.info('该期间没有带预扣税的电商销售订单')
+      return
+    }
+    importDialogVisible.value = true
+  } catch (e) {
+    ElMessage.error('获取电商销售数据失败')
+  }
+}
+
+const onImportSelectionChange = (val) => { importSelected.value = val }
+
+const confirmEcommerceImport = () => {
+  for (const order of importSelected.value) {
+    const whtAmount = parseFloat(order.wht_deducted || 0)
+    detailRows.value.push({
+      payment_date: order.order_date || '',
+      payee_name: (order.platform || '') + (order.store_name ? ' - ' + order.store_name : ''),
+      payee_tax_id: '',
+      payment_type: 'ecommerce_wht',
+      payment_amount: parseFloat(order.platform_sales || 0),
+      wht_rate: parseFloat(order.wht_rate || 0),
+      wht_amount: Math.round(whtAmount * 100) / 100,
+      description: '电商平台代扣 - ' + (order.order_no || ''),
+    })
+  }
+  importDialogVisible.value = false
+  ElMessage.success('已导入 ' + importSelected.value.length + ' 条预扣税明细')
+}
 const removeDetailRow = (i) => { if (detailRows.value.length > 1) detailRows.value.splice(i, 1) }
 
 // Calculator
