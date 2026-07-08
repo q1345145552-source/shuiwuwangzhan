@@ -6,7 +6,7 @@ const { validate, ecommerceSaleSchema } = require('../middleware/validator');
 const { logAudit } = require('../middleware/audit');
 const { VAT_RATE } = require('../constants');
 
-const NUM_FIELDS = ['platform_sales','shipping_income','discounts','platform_refunds','other_income','platform_fees','advertising_fees','shipping_fees','cost_of_goods','rental_fees','salary_fees','warehouse_fees','other_expenses','import_vat_paid','import_duty_paid','actual_received'];
+const NUM_FIELDS = ['platform_sales','shipping_income','discounts','platform_refunds','other_income','platform_subsidy','platform_fees','advertising_fees','shipping_fees','transaction_fee','wht_deducted','campaign_fee','affiliate_commission','cod_fee','cost_of_goods','rental_fees','salary_fees','warehouse_fees','other_expenses','import_vat_paid','import_duty_paid','actual_received'];
 const TXT_FIELDS = ['platform','store_name','order_date','order_no','notes'];
 
 function parseBody(body) {
@@ -23,7 +23,13 @@ function parseBody(body) {
   } else {
     v.vat_sales_calculated = Math.round(gross * v.vat_rate * 100) / 100;
   }
-  const ded = v.platform_fees + v.advertising_fees + v.shipping_fees + v.cost_of_goods;
+  v.custom_deductions = body.custom_deductions;
+  if (typeof v.custom_deductions === 'string') {
+    try { v.custom_deductions = JSON.parse(v.custom_deductions); } catch(e) { v.custom_deductions = []; }
+  }
+  if (!Array.isArray(v.custom_deductions)) v.custom_deductions = [];
+  v.custom_deductions = JSON.stringify(v.custom_deductions);
+  const ded = v.platform_fees + v.advertising_fees + v.shipping_fees + v.transaction_fee + v.wht_deducted + v.campaign_fee + v.affiliate_commission + v.cod_fee + v.cost_of_goods;
   v.vat_purchases_calculated = Math.round((ded / (1 + v.vat_rate) * v.vat_rate + v.import_vat_paid) * 100) / 100;
   return v;
 }
@@ -45,9 +51,9 @@ router.post('/sales', checkPeriodLock, validate(ecommerceSaleSchema), async (req
     if (!company_id || !period_id) return res.status(400).json({ error: '缺少 company_id 或 period_id' });
     const v = parseBody(req.body);
     const fields = [...TXT_FIELDS, ...NUM_FIELDS, 'is_vat_inclusive','vat_rate','collection_status','tax_invoice_issued','vat_sales_calculated','vat_purchases_calculated'];
-    const cols = [...fields, 'company_id', 'period_id'];
+    const cols = [...fields, 'custom_deductions', 'company_id', 'period_id'];
     const ph = cols.map((_, i) => `$${i+1}`).join(',');
-    const vals = [...TXT_FIELDS.map(k => v[k]), ...NUM_FIELDS.map(k => v[k]), v.is_vat_inclusive, v.vat_rate, v.collection_status, v.tax_invoice_issued, v.vat_sales_calculated, v.vat_purchases_calculated, company_id, period_id];
+    const vals = [...TXT_FIELDS.map(k => v[k]), ...NUM_FIELDS.map(k => v[k]), v.is_vat_inclusive, v.vat_rate, v.collection_status, v.tax_invoice_issued, v.vat_sales_calculated, v.vat_purchases_calculated, v.custom_deductions, company_id, period_id];
     const r = await pool.query(`INSERT INTO ecommerce_sales (${cols.join(',')}) VALUES (${ph}) RETURNING *`, vals);
     logAudit({ company_id, action: 'create', entity_type: 'ecommerce_sales', entity_id: r.rows[0].id, description: '新增销售记录', new_value: v, req });
     res.status(201).json(r.rows[0]);
@@ -68,7 +74,7 @@ router.put('/sales/:id', checkPeriodLock, validate(ecommerceSaleSchema), async (
       'rental_fees=$15','salary_fees=$16','warehouse_fees=$17','other_expenses=$18',
       'import_vat_paid=$19','import_duty_paid=$20','actual_received=$21',
       'is_vat_inclusive=$22','vat_rate=$23','collection_status=$24','tax_invoice_issued=$25',
-      'vat_sales_calculated=$26','vat_purchases_calculated=$27',
+      'vat_sales_calculated=$26','vat_purchases_calculated=$27','custom_deductions=$28',
     ];
     const vals = [
       v.platform, v.store_name, v.order_date, v.order_no, v.notes,
@@ -77,7 +83,7 @@ router.put('/sales/:id', checkPeriodLock, validate(ecommerceSaleSchema), async (
       v.rental_fees, v.salary_fees, v.warehouse_fees, v.other_expenses,
       v.import_vat_paid, v.import_duty_paid, v.actual_received,
       v.is_vat_inclusive, v.vat_rate, v.collection_status, v.tax_invoice_issued,
-      v.vat_sales_calculated, v.vat_purchases_calculated,
+      v.vat_sales_calculated, v.vat_purchases_calculated, v.custom_deductions,
       id,
     ];
     const r = await pool.query(`UPDATE ecommerce_sales SET ${pairs.join(',')} WHERE id=$${vals.length} RETURNING *`, vals);

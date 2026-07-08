@@ -94,13 +94,33 @@
             <div style="font-size:12px;color:#666;margin-bottom:4px">物流费</div>
             <el-input v-model.number="form.shipping_fees" type="number" step="0.01" placeholder="" style="width:90px" />
           </div>
+          <div style="width:100px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">交易手续费</div>
+            <el-input v-model.number="form.transaction_fee" type="number" step="0.01" placeholder="" style="width:100px" />
+          </div>
+          <div style="width:90px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">预扣税 WHT</div>
+            <el-input v-model.number="form.wht_deducted" type="number" step="0.01" placeholder="" style="width:90px" />
+          </div>
+          <div style="width:100px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">活动服务费</div>
+            <el-input v-model.number="form.campaign_fee" type="number" step="0.01" placeholder="" style="width:100px" />
+          </div>
+          <div style="width:100px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">达人佣金</div>
+            <el-input v-model.number="form.affiliate_commission" type="number" step="0.01" placeholder="" style="width:100px" />
+          </div>
+          <div style="width:100px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">COD 手续费</div>
+            <el-input v-model.number="form.cod_fee" type="number" step="0.01" placeholder="" style="width:100px" />
+          </div>
           <div style="width:110px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">采购成本</div>
             <el-input v-model.number="form.cost_of_goods" type="number" step="0.01" placeholder="" style="width:110px" />
           </div>
-          <div style="width:130px">
+          <div style="width:120px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">实际回款</div>
-            <el-input v-model.number="form.actual_received" type="number" step="0.01" placeholder="" style="width:130px" />
+            <el-input v-model.number="form.actual_received" type="number" step="0.01" placeholder="" style="width:120px" />
           </div>
           <div style="width:100px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">回款状态</div>
@@ -112,7 +132,21 @@
           </div>
         </div>
 
-        <!-- 第四行：开票 + 备注 + 按钮 -->
+        <!-- 自定义扣费 -->
+        <div style="background:#fafafa;border:1px solid #ebeef5;border-radius:6px;padding:12px;margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:13px;font-weight:bold;color:#606266">其他扣费</span>
+            <el-button size="small" @click="addCustomDeduction">+ 添加</el-button>
+          </div>
+          <div v-if="customDeductions.length === 0" style="color:#c0c4cc;font-size:12px;padding:4px 0">暂无自定义扣费项</div>
+          <div v-for="(item, idx) in customDeductions" :key="idx" style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+            <el-input v-model="item.name" placeholder="费用名称" size="small" style="width:140px" />
+            <el-input v-model.number="item.amount" type="number" step="0.01" placeholder="金额" size="small" style="width:110px" />
+            <el-input v-model="item.notes" placeholder="备注（必填）" size="small" style="width:200px" />
+            <el-button link type="danger" size="small" @click="customDeductions.splice(idx,1)">删除</el-button>
+          </div>
+        </div>
+        <!-- 开票 + 备注 + 按钮 -->
         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
           <div>
             <span style="font-size:12px;color:#666;margin-right:4px">已开 Tax Invoice</span>
@@ -222,6 +256,7 @@ const records = ref([])
 const loading = ref(false)
 const editingId = ref(null)
 const saveLoading = ref(false)
+const customDeductions = ref([])
 
 const isPeriodLocked = computed(() => {
   const p = store.periods?.find(p => p.id === selectedPeriodId.value)
@@ -230,12 +265,14 @@ const isPeriodLocked = computed(() => {
 
 const emptyForm = () => ({
   platform: '', store_name: '', order_date: '', order_no: '',
-  platform_sales: null, shipping_income: null, discounts: null, platform_refunds: null,
+  platform_sales: null, shipping_income: null, discounts: null, platform_refunds: null, platform_subsidy: null,
   is_vat_inclusive: true, vat_rate: 0.07,
-  platform_fees: null, advertising_fees: null, shipping_fees: null, cost_of_goods: null,
-  rental_fees: null, salary_fees: null, warehouse_fees: null, other_expenses: null,
+  platform_fees: null, advertising_fees: null, shipping_fees: null, transaction_fee: null,
+  wht_deducted: null, campaign_fee: null, affiliate_commission: null, cod_fee: null,
+  cost_of_goods: null, rental_fees: null, salary_fees: null, warehouse_fees: null, other_expenses: null,
   import_vat_paid: null, import_duty_paid: null,
   actual_received: null, collection_status: 'uncollected', tax_invoice_issued: false, notes: '',
+  custom_deductions: [],
 })
 
 const form = ref(emptyForm())
@@ -294,11 +331,17 @@ const editRecord = (row) => {
     shipping_income: parseFloat(row.shipping_income) || null,
     discounts: parseFloat(row.discounts) || null,
     platform_refunds: parseFloat(row.platform_refunds) || null,
+    platform_subsidy: parseFloat(row.platform_subsidy) || null,
     is_vat_inclusive: row.is_vat_inclusive !== false,
     vat_rate: parseFloat(row.vat_rate) || 0.07,
     platform_fees: parseFloat(row.platform_fees) || null,
     advertising_fees: parseFloat(row.advertising_fees) || null,
     shipping_fees: parseFloat(row.shipping_fees) || null,
+    transaction_fee: parseFloat(row.transaction_fee) || null,
+    wht_deducted: parseFloat(row.wht_deducted) || null,
+    campaign_fee: parseFloat(row.campaign_fee) || null,
+    affiliate_commission: parseFloat(row.affiliate_commission) || null,
+    cod_fee: parseFloat(row.cod_fee) || null,
     cost_of_goods: parseFloat(row.cost_of_goods) || null,
     rental_fees: parseFloat(row.rental_fees) || null,
     salary_fees: parseFloat(row.salary_fees) || null,
@@ -310,15 +353,21 @@ const editRecord = (row) => {
     collection_status: row.collection_status || 'uncollected',
     tax_invoice_issued: row.tax_invoice_issued === true,
     notes: row.notes || '',
+    custom_deductions: [],
   }
+  let cd = row.custom_deductions
+  if (typeof cd === 'string') { try { cd = JSON.parse(cd) } catch(e) { cd = [] } }
+  customDeductions.value = Array.isArray(cd) ? [...cd] : []
 }
 
-const resetForm = () => { editingId.value = null; form.value = emptyForm() }
+const resetForm = () => { editingId.value = null; form.value = emptyForm(); customDeductions.value = [] }
+
+const addCustomDeduction = () => { customDeductions.value.push({ name: '', amount: null, notes: '' }) }
 
 const saveRecord = async () => {
   saveLoading.value = true
   try {
-    const payload = { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value, ...form.value }
+    const payload = { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value, ...form.value, custom_deductions: customDeductions.value }
     if (editingId.value) {
       await api.put('/ecommerce/sales/' + editingId.value, payload)
       ElMessage.success('已更新')
