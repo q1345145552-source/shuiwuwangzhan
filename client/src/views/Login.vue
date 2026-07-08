@@ -2,7 +2,6 @@
   <div class="login-bg">
     <div class="login-card">
       <div class="login-logo">
-        <span style="font-size:32px">🇹🇭</span>
         <h1>电商税务管理系统</h1>
         <p>面向泰国跨境电商的一站式税务合规平台</p>
       </div>
@@ -28,28 +27,33 @@
         </el-form-item>
         <el-form-item style="margin-top:8px">
           <el-button type="primary" :loading="loading" @click="handleLogin" style="width:100%;height:44px;font-size:16px">
-            {{ loading ? '登 录 中...' : '登 录' }}
+            {{ loading ? '登录中...' : '登录' }}
           </el-button>
         </el-form-item>
       </el-form>
 
       <div class="login-footer">
-        <span>VAT · WHT · CIT · PND.1 · 社保 全覆盖</span>
+        <span>VAT / WHT / CIT / PND.1 / 社保 全覆盖</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
-import axios from 'axios'
+import api from '../api'
 
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
+
+onMounted(() => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+})
 
 const form = reactive({ username: '', password: '' })
 const rules = {
@@ -63,19 +67,23 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    const res = await axios.post('/api/auth/login', {
+    const data = await api.post('/auth/login', {
       username: form.username,
       password: form.password
     })
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('user', JSON.stringify(res.data.user))
-    ElMessage.success('登录成功，欢迎回来')
+    localStorage.setItem('token', data.token)
+    localStorage.setItem('user', JSON.stringify(data.user))
+    ElMessage.success('登录成功')
     router.push('/')
   } catch (e) {
-    const msg = e.response?.status === 401
-      ? '用户名或密码错误'
-      : (e.response?.data?.error || '登录失败，请检查网络连接')
-    ElMessage.error(msg)
+    const code = e.response?.status
+    if (code === 401) {
+      ElMessage.error('用户名或密码错误')
+    } else if (!e.response) {
+      ElMessage.error('网络连接失败，请检查网络')
+    } else {
+      ElMessage.error(e.response?.data?.error || '登录失败')
+    }
   } finally {
     loading.value = false
   }
@@ -102,7 +110,7 @@ async function handleLogin() {
   margin-bottom: 36px;
 }
 .login-logo h1 {
-  margin: 8px 0 4px;
+  margin: 4px 0;
   font-size: 22px;
   color: #303133;
   font-weight: 700;
