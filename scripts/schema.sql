@@ -1990,3 +1990,118 @@ ALTER TABLE ONLY public.wht_reports
 
 \unrestrict qWlIoJ8qP61IU7x8ziUgv9epElQQ22Vx8QruDz9AbOYnPXfJISY057nFHZR0lPa
 
+--
+-- PostgreSQL database dump
+--
+
+\restrict t644gBYQAxohdawBfonbGhKzwRZfCfSoQPIc3TqudhwWLdmaeOmkEn4uThjDW3o
+
+-- Dumped from database version 18.4 (Postgres.app)
+-- Dumped by pg_dump version 18.4 (Postgres.app)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: vat_reports; Type: TABLE; Schema: public; Owner: liuxiong
+--
+
+CREATE TABLE public.vat_reports (
+    id integer NOT NULL,
+    company_id integer NOT NULL,
+    period_id integer NOT NULL,
+    sales_amount numeric(15,2) DEFAULT 0,
+    vat_sales numeric(15,2) DEFAULT 0,
+    purchase_amount numeric(15,2) DEFAULT 0,
+    vat_purchases numeric(15,2) DEFAULT 0,
+    credit_forward numeric(15,2) DEFAULT 0,
+    vat_payable numeric(15,2) DEFAULT 0,
+    vat_credit_carry numeric(15,2) DEFAULT 0,
+    status character varying(20) DEFAULT 'draft'::character varying,
+    filed_date date,
+    created_at timestamp without time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.vat_reports OWNER TO liuxiong;
+
+--
+-- Name: vat_reports_id_seq; Type: SEQUENCE; Schema: public; Owner: liuxiong
+--
+
+CREATE SEQUENCE public.vat_reports_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.vat_reports_id_seq OWNER TO liuxiong;
+
+--
+-- Name: vat_reports_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: liuxiong
+--
+
+ALTER SEQUENCE public.vat_reports_id_seq OWNED BY public.vat_reports.id;
+
+
+--
+-- Name: vat_reports id; Type: DEFAULT; Schema: public; Owner: liuxiong
+--
+
+ALTER TABLE ONLY public.vat_reports ALTER COLUMN id SET DEFAULT nextval('public.vat_reports_id_seq'::regclass);
+
+
+--
+-- Name: vat_reports vat_reports_company_id_period_id_key; Type: CONSTRAINT; Schema: public; Owner: liuxiong
+--
+
+ALTER TABLE ONLY public.vat_reports
+    ADD CONSTRAINT vat_reports_company_id_period_id_key UNIQUE (company_id, period_id);
+
+
+--
+-- Name: vat_reports vat_reports_pkey; Type: CONSTRAINT; Schema: public; Owner: liuxiong
+--
+
+ALTER TABLE ONLY public.vat_reports
+    ADD CONSTRAINT vat_reports_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: vat_reports vat_reports_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: liuxiong
+--
+
+ALTER TABLE ONLY public.vat_reports
+    ADD CONSTRAINT vat_reports_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.companies(id) ON DELETE CASCADE;
+
+
+--
+-- Name: vat_reports vat_reports_period_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: liuxiong
+--
+
+ALTER TABLE ONLY public.vat_reports
+    ADD CONSTRAINT vat_reports_period_id_fkey FOREIGN KEY (period_id) REFERENCES public.accounting_periods(id) ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict t644gBYQAxohdawBfonbGhKzwRZfCfSoQPIc3TqudhwWLdmaeOmkEn4uThjDW3o
+
