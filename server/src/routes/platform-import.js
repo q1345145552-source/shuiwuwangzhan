@@ -208,24 +208,31 @@ router.post('/import', upload.single('file'), async (req, res, next) => {
           );
         }
 
-        // Upsert ecommerce_sales
-        const existing = await pool.query(
-          'SELECT id FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2',
-          [company_id, period_id]
+        // Insert one ecommerce_sales record per CSV row (multi-record mode)
+        const grossSales = totalAmount;
+        const vatSales = r2(grossSales - grossSales / (1 + VAT_RATE));
+        // Build custom_deductions for unrecognized fees
+        const cdItems = [];
+        if (otherFee > 0) cdItems.push({ name: '其他费用(平台)', amount: otherFee, notes: 'CSV导入', is_vat_inclusive: true });
+        const customDed = cdItems.length > 0 ? JSON.stringify(cdItems) : '[]';
+        // Purchases VAT from platform_fees (is_vat_inclusive)
+        const vatPurchases = r2((platformFee / (1 + VAT_RATE) * VAT_RATE) + (otherFee / (1 + VAT_RATE) * VAT_RATE));
+        await pool.query(
+          `INSERT INTO ecommerce_sales
+            (company_id, period_id, platform, store_name, order_date, order_no,
+             platform_sales, shipping_income, platform_fees,
+             is_vat_inclusive, vat_rate, collection_status,
+             vat_sales_calculated, vat_purchases_calculated,
+             custom_deductions, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+          [company_id, period_id, platRule.name, '', orderDate, orderId,
+           grossSales, shippingFee, platformFee,
+           true, VAT_RATE, 'uncollected',
+           vatSales, vatPurchases,
+           customDed, productName || '']
         );
-        if (existing.rows.length) {
-          await pool.query(
-            `UPDATE ecommerce_sales SET platform_sales = COALESCE(platform_sales,0) + $1, platform_fees = COALESCE(platform_fees,0) + $2, shipping_fees = COALESCE(shipping_fees,0) + $3 WHERE id = $4`,
-            [totalAmount, platformFee, shippingFee, existing.rows[0].id]
-          );
-        } else {
-          await pool.query(
-            `INSERT INTO ecommerce_sales (company_id, period_id, platform_sales, platform_fees, shipping_fees) VALUES ($1,$2,$3,$4,$5)`,
-            [company_id, period_id, totalAmount, platformFee, shippingFee]
-          );
-        }
 
-                // Mark raw order as matched
+        // Mark raw order as matched
         await pool.query('UPDATE platform_raw_orders SET matched_to_detail=TRUE WHERE company_id=$1 AND platform=$2 AND order_id=$3',
           [company_id, platPlatform, orderId]).catch(err => { console.error("平台导入 DB 写入失败:", err.message); });
         success++;

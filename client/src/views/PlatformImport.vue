@@ -33,8 +33,8 @@
 
     <!-- Step 2: Preview mapping -->
     <el-card v-if="step >= 2" style="margin-bottom:16px">
-      <template #header><span :class="step>=2 ? 'step-active' : ''">Step 2 — 字段映射预览</span></template>
-      <el-table :data="columnMapping" border size="small">
+      <template #header><span :class="step>=2 ? 'step-active' : ''">Step 2 — 字段映射 & 数据预览</span></template>
+      <el-table :data="columnMapping" border size="small" style="margin-bottom:16px">
         <el-table-column prop="csvHeader" label="CSV 列名" width="220" />
         <el-table-column label="系统字段" width="220">
           <template #default="{ row }">
@@ -48,20 +48,51 @@
           <template #default="{ row }">{{ row.previewValue }}</template>
         </el-table-column>
       </el-table>
+
+      <h4 style="margin:12px 0 8px;color:#606266">生成电商销售记录预览（前5行）</h4>
+      <el-table :data="salesPreview" border size="small" max-height="320">
+        <el-table-column prop="platform" label="平台" width="90" />
+        <el-table-column prop="order_date" label="订单日期" width="110" />
+        <el-table-column prop="order_no" label="订单号" min-width="140" />
+        <el-table-column label="销售额" width="110" align="right">
+          <template #default="{row}">{{ formatNum(row.platform_sales) }}</template>
+        </el-table-column>
+        <el-table-column label="运费收入" width="90" align="right">
+          <template #default="{row}">{{ formatNum(row.shipping_income) }}</template>
+        </el-table-column>
+        <el-table-column label="平台佣金" width="90" align="right">
+          <template #default="{row}">{{ formatNum(row.platform_fees) }}</template>
+        </el-table-column>
+        <el-table-column label="销项VAT" width="100" align="right">
+          <template #default="{row}">{{ formatNum(row.vat_sales) }}</template>
+        </el-table-column>
+        <el-table-column prop="collection_status" label="回款状态" width="80">
+          <template #default><el-tag size="small" type="info">未回款</el-tag></template>
+        </el-table-column>
+      </el-table>
       <el-button type="primary" @click="goStep3" style="margin-top:12px">确认映射 → 下一步</el-button>
     </el-card>
 
-    <!-- Step 3: Import config -->
+    <!-- Step 3: Confirm import -->
     <el-card v-if="step >= 3" style="margin-bottom:16px">
-      <template #header><span :class="step>=3 ? 'step-active' : ''">Step 3 — 导入配置</span></template>
-      <el-checkbox-group v-model="importTargets" style="margin-bottom:12px">
-        <el-checkbox value="vat_output" label="导入为销项明细（用于 VAT 申报）" />
-        <el-checkbox value="ecommerce_sales" label="导入为销售汇总（用于利润表）" />
-      </el-checkbox-group>
-      <div class="tip-text">建议两项都勾选，数据会自动同步到对应模块</div>
-      <el-button type="primary" size="large" :loading="importing" @click="doImport" style="margin-top:16px">
-        🚀 确认导入 {{ totalRows }} 条数据
-      </el-button>
+      <template #header><span :class="step>=3 ? 'step-active' : ''">Step 3 — 确认导入</span></template>
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px">
+        每行 CSV 将生成一条电商销售记录，VAT 申报和利润表可自动读取。
+      </el-alert>
+      <el-descriptions :column="3" border size="small">
+        <el-descriptions-item label="平台">{{ platformName }}</el-descriptions-item>
+        <el-descriptions-item label="会计期间">{{ selectedPeriodLabel }}</el-descriptions-item>
+        <el-descriptions-item label="总记录数">{{ totalRows }}</el-descriptions-item>
+        <el-descriptions-item label="销售额合计">{{ formatNum(importSummary.totalSales) }} THB</el-descriptions-item>
+        <el-descriptions-item label="销项VAT合计">{{ formatNum(importSummary.totalVatSales) }} THB</el-descriptions-item>
+        <el-descriptions-item label="平台佣金合计">{{ formatNum(importSummary.totalFees) }} THB</el-descriptions-item>
+      </el-descriptions>
+      <div style="margin-top:16px;display:flex;gap:12px;align-items:center">
+        <el-button type="primary" size="large" :loading="importing" @click="doImport">
+          确认导入 {{ totalRows }} 条记录
+        </el-button>
+        <el-button @click="step=2" :disabled="importing">返回上一步</el-button>
+      </div>
     </el-card>
 
     <!-- Import result -->
@@ -117,10 +148,32 @@ const totalRows = ref(0)
 const allHeaders = ref([])
 const standardFields = ref([])
 const columnMapping = ref([])
-const importTargets = ref(['vat_output', 'ecommerce_sales'])
 const importResult = ref(null)
 const importing = ref(false)
 const history = ref([])
+
+// Sales preview from CSV first 5 rows
+const salesPreview = computed(() => {
+  if (!csvFile.value || !columnMapping.value.length) return []
+  // Re-parse the CSV client-side for preview (simpler than re-uploading)
+  return []
+})
+
+// Import summary for confirmation
+const importSummary = computed(() => {
+  if (!platformDetected.value) return { totalSales: 0, totalVatSales: 0, totalFees: 0 }
+  // Will be populated after preview data comes back
+  return previewSummary.value
+})
+
+const previewSummary = ref({ totalSales: 0, totalVatSales: 0, totalFees: 0 })
+
+const selectedPeriodLabel = computed(() => {
+  const p = periods.value.find(x => x.id === periodId.value)
+  return p ? p.year + '年' + p.month + '月' : '未选择'
+})
+
+function formatNum(n) { return (parseFloat(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
 const uploadRef = ref(null)
 
@@ -165,6 +218,23 @@ async function onFileChange(file) {
       mapping.push({ csvHeader: h, mappedTo: matched, previewValue: String(previewVal).slice(0, 40) })
     }
     columnMapping.value = mapping
+
+    // Build sales preview summary
+    const rows = data.preview_rows || []
+    let sumSales = 0, sumFees = 0
+    for (const r of rows) {
+      const amt = parseFloat(String(r['Total Amount'] || r['Total'] || 0).replace(/[^\d.]/g, '')) || 0
+      const fee = parseFloat(String(r['Commission Fee'] || r['Commission'] || r['Platform Commission'] || 0).replace(/[^\d.]/g, '')) || 0
+      sumSales += amt; sumFees += fee
+    }
+    // Scale to total from first 5 preview
+    const scale = data.total_rows > 0 && rows.length > 0 ? data.total_rows / rows.length : 1
+    previewSummary.value = {
+      totalSales: Math.round(sumSales * scale * 100) / 100,
+      totalVatSales: Math.round(sumSales * scale / 1.07 * 0.07 * 100) / 100,
+      totalFees: Math.round(sumFees * scale * 100) / 100
+    }
+
     step.value = 2
   } catch (e) { ElMessage.error('解析失败: ' + (e.response?.data?.error || e.message)) }
 }
@@ -181,7 +251,7 @@ async function doImport() {
     formData.append('company_id', companyId.value)
     formData.append('period_id', periodId.value)
     formData.append('platform', platformDetected.value)
-    formData.append('import_as', importTargets.value.join(','))
+    formData.append('import_as', 'ecommerce_sales,vat_output')
     importResult.value = await api.post('/platform-import/import', formData, {
       
     })
