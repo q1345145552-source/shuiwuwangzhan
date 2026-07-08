@@ -21,6 +21,7 @@ services:
       db:
         condition: service_healthy
     volumes:
+      - ./client/dist:/app/client/dist
       - invoices_data:/app/server/invoices
       - wht_certs_data:/app/server/wht-certificates
       - exports_data:/app/server/exports
