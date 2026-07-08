@@ -1,238 +1,206 @@
 <template>
   <div class="ecommerce-sales">
+    <!-- 顶部：公司 + 期间选择 -->
     <el-card style="margin-bottom:16px">
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-        <span style="font-weight:bold">电商销售录入</span>
+        <span style="font-weight:bold;font-size:18px">电商销售录入</span>
         <CompanyPeriodSelector
           v-model:company-id="selectedCompanyId" v-model:period-id="selectedPeriodId"
-          @company-change="onCompanyChange" @period-change="fetchSales"
+          @company-change="onCompanyChange" @period-change="fetchList"
           :show-lock-badge="true"
         />
-        <el-tag v-if="isSaved" type="success">已保存</el-tag>
-        <el-tag v-if="form.collection_status === 'collected'" type="success">已回款</el-tag>
-        <el-tag v-else-if="form.collection_status === 'partial'" type="warning">部分回款</el-tag>
-        <el-tag v-else-if="form.collection_status === 'uncollected'" type="info">未回款</el-tag>
+        <el-tag v-if="isPeriodLocked" type="warning">期间已锁定（只读）</el-tag>
       </div>
     </el-card>
 
-    <el-alert v-if="isPeriodLocked" title="该会计期间已锁定，数据为只读状态" type="warning" show-icon :closable="false" style="margin-bottom:16px" />
-    <el-skeleton v-if="skeletonLoading" :rows="10" animated style="padding:16px" />
-
-    <el-row v-if="selectedPeriodId" :gutter="16">
-      <!-- ===== 左栏：录入区 ===== -->
-      <el-col :span="14">
-        <!-- 1. 平台信息 -->
-        <el-card style="margin-bottom:16px">
-          <template #header>
-            <h3 style="margin:0;color:#409eff"> 平台信息</h3>
-          </template>
-          <el-form label-width="140px" size="default">
-            <el-form-item label="平台">
-              <el-select v-model="form.platform" placeholder="选择电商平台" style="width:100%" clearable>
-                <el-option v-for="p in platforms" :key="p" :label="p" :value="p" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="店铺名称">
-              <el-input v-model="form.store_name" placeholder="如：蓝鲨泰国旗舰店" maxlength="200" />
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <!-- 2. 销售收入 -->
-        <el-card style="margin-bottom:16px">
-          <template #header>
-            <h3 style="margin:0;color:#67c23a"> 销售收入</h3>
-          </template>
-          <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px" title=" 提示">
-            <template #default>
-              <p style="margin:0;font-size:13px;line-height:1.8">
-                · <b>含税金额</b>：平台账单上的金额通常已包含 7% 增值税（VAT）。<br/>
-                · <b>未税金额</b>：扣除 VAT 后的实际收入，用于计算利润表。<br/>
-                · 销售额和退款均按同一方式处理：选"含税"则自动倒挤 VAT。
-              </p>
-            </template>
-          </el-alert>
-          <el-form label-width="140px" size="default" style="margin-top:12px">
-            <el-form-item label="商品销售额">
-              <el-input-number v-model="form.platform_sales" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="运费收入">
-              <el-input-number v-model="form.shipping_income" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="优惠折扣">
-              <el-input-number v-model="form.discounts" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="退款金额">
-              <el-input-number v-model="form.platform_refunds" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="金额含 VAT">
-              <el-switch v-model="form.is_vat_inclusive" active-text="含税" inactive-text="未税" />
-              <span style="margin-left:8px;font-size:12px;color:#999">
-                {{ form.is_vat_inclusive ? '输入金额已含7% VAT，系统自动计算未税' : '输入金额为未税，系统自动计算VAT' }}
-              </span>
-            </el-form-item>
-            <el-form-item label="VAT 税率">
-              <el-input-number v-model="form.vat_rate" :min="0" :max="1" :precision="4" :step="0.01" controls-position="right" style="width:160px" />
-              <span style="margin-left:8px;font-size:12px;color:#999">默认 7%（0.07），一般无需修改</span>
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <!-- 3. 平台费用 -->
-        <el-card style="margin-bottom:16px">
-          <template #header>
-            <h3 style="margin:0;color:#e6a23c"> 平台费用</h3>
-          </template>
-          <el-form label-width="140px" size="default">
-            <el-form-item label="平台手续费">
-              <el-input-number v-model="form.platform_fees" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="广告费">
-              <el-input-number v-model="form.advertising_fees" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="物流运费">
-              <el-input-number v-model="form.shipping_fees" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <!-- 4. 经营成本 -->
-        <el-card style="margin-bottom:16px">
-          <template #header>
-            <h3 style="margin:0;color:#f56c6c"> 经营成本</h3>
-          </template>
-          <el-form label-width="140px" size="default">
-            <el-form-item label="采购成本">
-              <el-input-number v-model="form.cost_of_goods" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="房租">
-              <el-input-number v-model="form.rental_fees" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="工资">
-              <el-input-number v-model="form.salary_fees" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="仓储费">
-              <el-input-number v-model="form.warehouse_fees" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="其他费用">
-              <el-input-number v-model="form.other_expenses" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <!-- 5. 进口 -->
-        <el-card style="margin-bottom:16px">
-          <template #header>
-            <h3 style="margin:0;color:#909399"> 进口</h3>
-          </template>
-          <el-form label-width="140px" size="default">
-            <el-form-item label="进口VAT已缴">
-              <el-input-number v-model="form.import_vat_paid" :min="0" :precision="2" controls-position="right" style="width:100%" />
-              <span style="font-size:12px;color:#999">计入进项抵扣</span>
-            </el-form-item>
-            <el-form-item label="进口关税已缴">
-              <el-input-number v-model="form.import_duty_paid" :min="0" :precision="2" controls-position="right" style="width:100%" />
-              <span style="font-size:12px;color:#999">计入成本</span>
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <!-- 6. 回款与开票 -->
-        <el-card style="margin-bottom:16px">
-          <template #header>
-            <h3 style="margin:0;color:#a855f7"> 回款与开票</h3>
-          </template>
-          <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px" title=" 提示">
-            <template #default>
-              <p style="margin:0;font-size:13px;line-height:1.8">
-                · <b>实际回款金额</b>：平台实际打到银行账户的金额（扣除平台手续费、退款等后）。<br/>
-                · <b>回款状态</b>：Shopee/Lazada 通常 T+7~15 天回款，用于跟踪资金到账情况。<br/>
-                · <b>Tax Invoice</b>：泰国税务局要求每笔销售开具税务发票，勾选后系统记录。
-              </p>
-            </template>
-          </el-alert>
-          <el-form label-width="140px" size="default" style="margin-top:12px">
-            <el-form-item label="实际回款金额">
-              <el-input-number v-model="form.actual_received" :min="0" :precision="2" controls-position="right" style="width:100%" />
-            </el-form-item>
-            <el-form-item label="回款状态">
-              <el-select v-model="form.collection_status" style="width:100%">
-                <el-option label="未回款 — 平台尚未结算" value="uncollected" />
-                <el-option label="部分回款 — 已收到部分金额" value="partial" />
-                <el-option label="已回款 — 全部到账" value="collected" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="已开 Tax Invoice">
-              <el-switch v-model="form.tax_invoice_issued" active-text="已开具" inactive-text="未开具" />
-            </el-form-item>
-            <el-form-item label="备注">
-              <el-input v-model="form.notes" type="textarea" :rows="2" placeholder="补充说明…" />
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <!-- 保存按钮 -->
-        <div style="text-align:center;padding:16px">
-          <el-button type="primary" size="large" :loading="saving" @click="saveSales" :disabled="isPeriodLocked">
-            保存数据
-          </el-button>
-          <el-button v-if="isSaved" size="large" @click="$router.push('/vat-report')">
-            查看 VAT 申报 →
-          </el-button>
-        </div>
-      </el-col>
-
-      <!-- ===== 右栏：VAT 汇总 + 利润预览 ===== -->
-      <el-col :span="10">
-        <el-card style="margin-bottom:16px;background:#f0f9ff">
-          <template #header>
-            <h3 style="margin:0;color:#409eff"> VAT 对账汇总</h3>
-          </template>
-          <el-table :data="vatSummary" :show-header="false" size="small" style="width:100%">
-            <el-table-column prop="label" width="160" />
-            <el-table-column prop="value" align="right">
-              <template #default="{ row }">
-                <span :style="{ fontWeight: row.bold ? 'bold' : 'normal', color: row.color || '#333', fontSize: row.fontSize || '14px' }">
-                  {{ row.value }}
-                </span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-
-        <el-card style="margin-bottom:16px;background:#fef9e7">
-          <template #header>
-            <h3 style="margin:0;color:#e6a23c"> 利润预览</h3>
-          </template>
-          <el-table :data="profitSummary" :show-header="false" size="small" style="width:100%">
-            <el-table-column prop="label" width="160" />
-            <el-table-column prop="value" align="right">
-              <template #default="{ row }">
-                <span :style="{ fontWeight: row.bold ? 'bold' : 'normal', color: row.color || '#333', fontSize: row.fontSize || '14px' }">
-                  {{ row.value }}
-                </span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-
-        <!-- 快捷提示 -->
-        <el-card>
-          <template #header><h4 style="margin:0"> 录入指南</h4></template>
-          <div style="font-size:13px;color:#666;line-height:2">
-            <p><b>1.</b> 从 Shopee/Lazada Seller Center 导出月度账单</p>
-            <p><b>2.</b> 将「订单收入」填入商品销售额</p>
-            <p><b>3.</b> 将「退款」填入退款金额</p>
-            <p><b>4.</b> 将「平台佣金+广告+物流」填入对应费用</p>
-            <p><b>5.</b> 将银行实际到账填入实际回款</p>
-            <p><b>6.</b> 检查右侧 VAT 对账数据</p>
-            <p style="margin-top:8px;color:#999">
-              如需逐笔明细，请前往 <el-link type="primary" @click="$router.push('/vat-details')">VAT 明细</el-link>
-            </p>
+    <div v-if="selectedPeriodId">
+      <!-- 录入表单 -->
+      <el-card style="margin-bottom:16px">
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:bold">{{ editingId ? '编辑记录' : '新增记录' }}</span>
+            <el-button v-if="editingId" size="small" @click="resetForm">取消编辑</el-button>
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </template>
+
+        <!-- 第一行：平台 + 店铺 + 日期 + 订单号 + 含税/未税 -->
+        <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px">
+          <div style="width:100px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">平台</div>
+            <el-select v-model="form.platform" placeholder="选择" style="width:100px" size="default" clearable>
+              <el-option v-for="p in platforms" :key="p" :label="p" :value="p" />
+            </el-select>
+          </div>
+          <div style="width:140px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">店铺名称</div>
+            <el-input v-model="form.store_name" placeholder="店铺名" size="default" />
+          </div>
+          <div style="width:130px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">订单日期</div>
+            <el-date-picker v-model="form.order_date" type="date" placeholder="日期" style="width:130px" value-format="YYYY-MM-DD" />
+          </div>
+          <div style="width:130px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">订单号</div>
+            <el-input v-model="form.order_no" placeholder="#订单号" size="default" />
+          </div>
+          <div style="width:170px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">VAT 方式</div>
+            <el-radio-group v-model="form.is_vat_inclusive" size="small">
+              <el-radio-button :value="true">含税</el-radio-button>
+              <el-radio-button :value="false">未税</el-radio-button>
+            </el-radio-group>
+          </div>
+        </div>
+
+        <!-- 第二行：销售额 + 运费 + 折扣 + 退款 + VAT税率 + 试算 -->
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+          <div style="width:130px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">销售额</div>
+            <el-input-number v-model="form.platform_sales" :min="0" :precision="2" controls-position="right" style="width:130px" />
+          </div>
+          <div style="width:100px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">运费收入</div>
+            <el-input-number v-model="form.shipping_income" :min="0" :precision="2" controls-position="right" style="width:100px" />
+          </div>
+          <div style="width:90px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">折扣</div>
+            <el-input-number v-model="form.discounts" :min="0" :precision="2" controls-position="right" style="width:90px" />
+          </div>
+          <div style="width:100px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">退款</div>
+            <el-input-number v-model="form.platform_refunds" :min="0" :precision="2" controls-position="right" style="width:100px" />
+          </div>
+          <div style="width:90px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">VAT 税率</div>
+            <el-input-number v-model="form.vat_rate" :min="0" :max="1" :precision="4" :step="0.01" controls-position="right" style="width:90px" size="small" />
+          </div>
+          <div style="background:#f5f7fa;padding:6px 12px;border-radius:4px;font-size:12px;text-align:center">
+            <span style="color:#909399">未税 {{ fmt(vatPreview.netExVat) }}</span>
+            <span style="color:#e6a23c;font-weight:bold;margin-left:8px">VAT {{ fmt(vatPreview.vatSales) }}</span>
+          </div>
+        </div>
+
+        <!-- 第三行：手续费 + 广告 + 物流 + 采购 + 回款 + 回款状态 -->
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+          <div style="width:110px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">平台手续费</div>
+            <el-input-number v-model="form.platform_fees" :min="0" :precision="2" controls-position="right" style="width:110px" />
+          </div>
+          <div style="width:90px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">广告费</div>
+            <el-input-number v-model="form.advertising_fees" :min="0" :precision="2" controls-position="right" style="width:90px" />
+          </div>
+          <div style="width:90px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">物流费</div>
+            <el-input-number v-model="form.shipping_fees" :min="0" :precision="2" controls-position="right" style="width:90px" />
+          </div>
+          <div style="width:110px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">采购成本</div>
+            <el-input-number v-model="form.cost_of_goods" :min="0" :precision="2" controls-position="right" style="width:110px" />
+          </div>
+          <div style="width:130px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">实际回款</div>
+            <el-input-number v-model="form.actual_received" :min="0" :precision="2" controls-position="right" style="width:130px" />
+          </div>
+          <div style="width:100px">
+            <div style="font-size:12px;color:#666;margin-bottom:4px">回款状态</div>
+            <el-select v-model="form.collection_status" style="width:100px" size="default">
+              <el-option label="未回款" value="uncollected" />
+              <el-option label="部分回款" value="partial" />
+              <el-option label="已回款" value="collected" />
+            </el-select>
+          </div>
+        </div>
+
+        <!-- 第四行：开票 + 备注 + 按钮 -->
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+          <div>
+            <span style="font-size:12px;color:#666;margin-right:4px">已开 Tax Invoice</span>
+            <el-switch v-model="form.tax_invoice_issued" size="small" />
+          </div>
+          <div style="flex:1;min-width:200px">
+            <el-input v-model="form.notes" placeholder="备注…" size="small" />
+          </div>
+          <div style="display:flex;gap:8px">
+            <el-button type="primary" :loading="saveLoading" @click="saveRecord" :disabled="isPeriodLocked">
+              {{ editingId ? '更新' : '保存' }}
+            </el-button>
+            <el-button @click="resetForm" :disabled="isPeriodLocked">清空</el-button>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- 记录列表 -->
+      <el-card style="margin-bottom:16px">
+        <template #header>
+          <span style="font-weight:bold">销售记录</span>
+        </template>
+
+        <el-table :data="records" border stripe v-loading="loading" size="small" max-height="500">
+          <el-table-column label="平台" width="70" prop="platform">
+            <template #default="{row}"><el-tag size="small" v-if="row.platform">{{ row.platform }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="店铺" min-width="100" prop="store_name" show-overflow-tooltip />
+          <el-table-column label="日期" width="100" prop="order_date" />
+          <el-table-column label="订单号" min-width="110" prop="order_no" show-overflow-tooltip />
+          <el-table-column label="销售额" width="100" align="right">
+            <template #default="{row}">{{ fmt(row.platform_sales) }}</template>
+          </el-table-column>
+          <el-table-column label="退款" width="80" align="right">
+            <template #default="{row}">{{ fmt(row.platform_refunds) }}</template>
+          </el-table-column>
+          <el-table-column label="销项VAT" width="90" align="right">
+            <template #default="{row}">{{ fmt(row.vat_sales_calculated) }}</template>
+          </el-table-column>
+          <el-table-column label="手续费" width="80" align="right">
+            <template #default="{row}">{{ fmt(row.platform_fees) }}</template>
+          </el-table-column>
+          <el-table-column label="广告费" width="80" align="right">
+            <template #default="{row}">{{ fmt(row.advertising_fees) }}</template>
+          </el-table-column>
+          <el-table-column label="回款" width="90" align="right">
+            <template #default="{row}">{{ fmt(row.actual_received) }}</template>
+          </el-table-column>
+          <el-table-column label="状态" width="75">
+            <template #default="{row}">
+              <el-tag size="small" v-if="row.collection_status==='collected'" type="success">已回款</el-tag>
+              <el-tag size="small" v-else-if="row.collection_status==='partial'" type="warning">部分</el-tag>
+              <el-tag size="small" v-else type="info">未回款</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="开票" width="50">
+            <template #default="{row}"><span v-if="row.tax_invoice_issued" style="color:#67c23a">是</span><span v-else>否</span></template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="{row}">
+              <el-button link type="primary" size="small" @click="editRecord(row)" :disabled="isPeriodLocked">编辑</el-button>
+              <el-button link type="danger" size="small" @click="deleteRecord(row)" :disabled="isPeriodLocked">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <!-- 汇总行 -->
+        <div style="margin-top:12px;padding:10px 16px;background:#f5f7fa;border-radius:6px;display:flex;flex-wrap:wrap;gap:20px;font-size:13px">
+          <span style="color:#909399">共 {{ records.length }} 条</span>
+          <span>销售总额 <b>{{ fmt(totals.grossSales) }}</b></span>
+          <span>未税合计 <b>{{ fmt(totals.netSales) }}</b></span>
+          <span>销项VAT <b style="color:#e6a23c">{{ fmt(totals.vatSales) }}</b></span>
+          <span>手续费 <b>{{ fmt(totals.platformFees) }}</b></span>
+          <span>广告费 <b>{{ fmt(totals.adFees) }}</b></span>
+          <span>实际回款 <b style="color:#409eff">{{ fmt(totals.received) }}</b></span>
+          <span>未回款 <b style="color:#f56c6c">{{ fmt(totals.uncollected) }}</b></span>
+        </div>
+      </el-card>
+
+      <!-- 提示 -->
+      <el-card>
+        <div style="font-size:12px;color:#909399;line-height:2">
+          <p>含税金额：平台结算单上包含增值税的金额。不含税金额：扣除增值税后的实际收入。</p>
+          <p>销项增值税：你卖货时代收的增值税（7%），需要按时申报交给税务局。</p>
+          <p>回款状态：标记这笔钱到账了没有。已回款 = 钱已到你泰国银行账户。</p>
+        </div>
+      </el-card>
+    </div>
 
     <el-empty v-else description="请选择客户公司和会计期间" />
   </div>
@@ -241,180 +209,139 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useCompanyStore } from '../stores/currentCompany'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
 
 const store = useCompanyStore()
 import CompanyPeriodSelector from '../components/CompanyPeriodSelector.vue'
 
-const companies = ref([])
-const periods = ref([])
+const platforms = ['Shopee', 'Lazada', 'TikTok', 'Temu', 'Other']
 const selectedCompanyId = ref(null)
 const selectedPeriodId = ref(null)
-const saving = ref(false)
-const isSaved = ref(false)
-const creditForward = ref(0)
-const skeletonLoading = ref(false)
+const records = ref([])
+const loading = ref(false)
+const editingId = ref(null)
+const saveLoading = ref(false)
 
-const platforms = ['Shopee', 'Lazada', 'TikTok', 'Temu', 'Other']
+const isPeriodLocked = computed(() => {
+  const p = store.periods?.find(p => p.id === selectedPeriodId.value)
+  return p?.status === 'locked'
+})
 
 const emptyForm = () => ({
-  platform: '', store_name: '',
-  platform_sales: 0, shipping_income: 0, discounts: 0, platform_refunds: 0, other_income: 0,
+  platform: '', store_name: '', order_date: '', order_no: '',
+  platform_sales: 0, shipping_income: 0, discounts: 0, platform_refunds: 0,
   is_vat_inclusive: true, vat_rate: 0.07,
-  platform_fees: 0, advertising_fees: 0, shipping_fees: 0,
-  cost_of_goods: 0, rental_fees: 0, salary_fees: 0, warehouse_fees: 0, other_expenses: 0,
+  platform_fees: 0, advertising_fees: 0, shipping_fees: 0, cost_of_goods: 0,
+  rental_fees: 0, salary_fees: 0, warehouse_fees: 0, other_expenses: 0,
   import_vat_paid: 0, import_duty_paid: 0,
   actual_received: 0, collection_status: 'uncollected', tax_invoice_issued: false, notes: '',
 })
 
 const form = ref(emptyForm())
 
-// VAT summary table
-const vatSummary = computed(() => {
+const fmt = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+const vatPreview = computed(() => {
   const gross = form.value.platform_sales - form.value.platform_refunds
   const rate = form.value.vat_rate || 0.07
-  const inclusive = form.value.is_vat_inclusive
-
-  let netExVat, vatSales
-  if (inclusive) {
-    netExVat = Math.round(gross / (1 + rate) * 100) / 100
-    vatSales = Math.round((gross - netExVat) * 100) / 100
-  } else {
-    vatSales = Math.round(gross * rate * 100) / 100
-    netExVat = gross
+  if (form.value.is_vat_inclusive) {
+    const net = Math.round(gross / (1 + rate) * 100) / 100
+    return { netExVat: net, vatSales: Math.round((gross - net) * 100) / 100 }
   }
-
-  const deductible = form.value.platform_fees + form.value.advertising_fees + form.value.shipping_fees + form.value.cost_of_goods
-  const vatPurchases = Math.round((deductible / (1 + rate) * rate + form.value.import_vat_paid) * 100) / 100
-  const netVat = Math.round((vatSales - vatPurchases - creditForward.value) * 100) / 100
-
-  const fmt = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-  return [
-    { label: '含税销售额', value: fmt(gross) },
-    { label: '未税销售额', value: fmt(netExVat) },
-    { label: '', value: '' },
-    { label: '销项 VAT（应交）', value: fmt(vatSales), color: '#e6a23c' },
-    { label: '进项 VAT（已付）', value: fmt(vatPurchases), color: '#67c23a' },
-    { label: '上期留抵', value: fmt(creditForward.value) },
-    { label: '', value: '' },
-    { label: netVat >= 0 ? '本期应缴 VAT' : '本期留抵（可结转下期）', value: fmt(Math.abs(netVat)), bold: true, color: netVat >= 0 ? '#f56c6c' : '#67c23a', fontSize: '16px' },
-  ]
+  return { netExVat: gross, vatSales: Math.round(gross * rate * 100) / 100 }
 })
 
-// Profit preview
-const profitSummary = computed(() => {
-  const gross = form.value.platform_sales - form.value.platform_refunds
-  const rate = form.value.vat_rate || 0.07
-  const inclusive = form.value.is_vat_inclusive
-  const netExVat = inclusive ? gross / (1 + rate) : gross
-  const totalCosts = form.value.cost_of_goods + form.value.platform_fees + form.value.advertising_fees + form.value.shipping_fees
-  const totalExpenses = form.value.rental_fees + form.value.salary_fees + form.value.warehouse_fees + form.value.other_expenses
-  const profit = netExVat - totalCosts - totalExpenses
-
-  const fmt = (n) => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-  return [
-    { label: '净销售收入（未税）', value: fmt(netExVat) },
-    { label: '电商费用合计', value: fmt(totalCosts) },
-    { label: '经营成本合计', value: fmt(totalExpenses) },
-    { label: '', value: '' },
-    { label: '预测利润', value: fmt(profit), bold: true, color: profit >= 0 ? '#67c23a' : '#f56c6c', fontSize: '16px' },
-    { label: '实际回款', value: fmt(form.value.actual_received), color: '#409eff' },
-  ]
+const totals = computed(() => {
+  let gs = 0, ns = 0, vs = 0, pf = 0, af = 0, rc = 0, uc = 0
+  for (const r of records.value) {
+    const gross = parseFloat(r.platform_sales || 0) - parseFloat(r.platform_refunds || 0)
+    gs += gross
+    ns += r.is_vat_inclusive !== false ? gross / (1 + (parseFloat(r.vat_rate) || 0.07)) : gross
+    vs += parseFloat(r.vat_sales_calculated || 0)
+    pf += parseFloat(r.platform_fees || 0)
+    af += parseFloat(r.advertising_fees || 0)
+    rc += parseFloat(r.actual_received || 0)
+    if (r.collection_status === 'uncollected') uc += gross
+  }
+  return {
+    grossSales: Math.round(gs * 100) / 100, netSales: Math.round(ns * 100) / 100,
+    vatSales: Math.round(vs * 100) / 100, platformFees: Math.round(pf * 100) / 100,
+    adFees: Math.round(af * 100) / 100, received: Math.round(rc * 100) / 100,
+    uncollected: Math.round(uc * 100) / 100,
+  }
 })
 
-const isPeriodLocked = computed(() => {
-  const p = periods.value.find(p => p.id === selectedPeriodId.value)
-  return p?.status === 'locked'
-})
+const onCompanyChange = () => { selectedPeriodId.value = null; store.loadPeriods(selectedCompanyId.value) }
 
-const fetchCompanies = async () => {
-  try { companies.value = await api.get('/companies') } catch (e) { console.error('加载公司失败', e) }
-}
-const fetchPeriods = () => store.loadPeriods(selectedCompanyId.value)
-const onCompanyChange = () => { selectedPeriodId.value = null; fetchPeriods() }
-
-const fetchSales = async () => {
-  isSaved.value = false
+const fetchList = async () => {
+  records.value = []
   if (!selectedPeriodId.value) return
-  skeletonLoading.value = true
+  loading.value = true
   try {
-    const data = await api.get('/ecommerce/sales', {
-      params: { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value }
-    })
-    if (data) {
-      Object.assign(form.value, {
-        platform: data.platform || '',
-        store_name: data.store_name || '',
-        platform_sales: parseFloat(data.platform_sales) || 0,
-        shipping_income: parseFloat(data.shipping_income) || 0,
-        discounts: parseFloat(data.discounts) || 0,
-        platform_refunds: parseFloat(data.platform_refunds) || 0,
-        other_income: parseFloat(data.other_income) || 0,
-        is_vat_inclusive: data.is_vat_inclusive !== false,
-        vat_rate: parseFloat(data.vat_rate) || 0.07,
-        platform_fees: parseFloat(data.platform_fees) || 0,
-        advertising_fees: parseFloat(data.advertising_fees) || 0,
-        shipping_fees: parseFloat(data.shipping_fees) || 0,
-        cost_of_goods: parseFloat(data.cost_of_goods) || 0,
-        rental_fees: parseFloat(data.rental_fees) || 0,
-        salary_fees: parseFloat(data.salary_fees) || 0,
-        warehouse_fees: parseFloat(data.warehouse_fees) || 0,
-        other_expenses: parseFloat(data.other_expenses) || 0,
-        import_vat_paid: parseFloat(data.import_vat_paid) || 0,
-        import_duty_paid: parseFloat(data.import_duty_paid) || 0,
-        actual_received: parseFloat(data.actual_received) || 0,
-        collection_status: data.collection_status || 'uncollected',
-        tax_invoice_issued: data.tax_invoice_issued === true,
-        notes: data.notes || '',
-      })
-      isSaved.value = true
-    } else {
-      form.value = emptyForm()
-    }
-  } catch (e) { console.error('加载销售数据失败', e) }
-  finally { skeletonLoading.value = false }
+    const data = await api.get('/ecommerce/sales', { params: { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value } })
+    records.value = Array.isArray(data) ? data : (data ? [data] : [])
+  } catch (e) { console.error(e) }
+  finally { loading.value = false }
 }
 
-const saveSales = async () => {
-  saving.value = true
+const editRecord = (row) => {
+  editingId.value = row.id
+  form.value = {
+    platform: row.platform || '', store_name: row.store_name || '',
+    order_date: row.order_date || '', order_no: row.order_no || '',
+    platform_sales: parseFloat(row.platform_sales) || 0,
+    shipping_income: parseFloat(row.shipping_income) || 0,
+    discounts: parseFloat(row.discounts) || 0,
+    platform_refunds: parseFloat(row.platform_refunds) || 0,
+    is_vat_inclusive: row.is_vat_inclusive !== false,
+    vat_rate: parseFloat(row.vat_rate) || 0.07,
+    platform_fees: parseFloat(row.platform_fees) || 0,
+    advertising_fees: parseFloat(row.advertising_fees) || 0,
+    shipping_fees: parseFloat(row.shipping_fees) || 0,
+    cost_of_goods: parseFloat(row.cost_of_goods) || 0,
+    rental_fees: parseFloat(row.rental_fees) || 0,
+    salary_fees: parseFloat(row.salary_fees) || 0,
+    warehouse_fees: parseFloat(row.warehouse_fees) || 0,
+    other_expenses: parseFloat(row.other_expenses) || 0,
+    import_vat_paid: parseFloat(row.import_vat_paid) || 0,
+    import_duty_paid: parseFloat(row.import_duty_paid) || 0,
+    actual_received: parseFloat(row.actual_received) || 0,
+    collection_status: row.collection_status || 'uncollected',
+    tax_invoice_issued: row.tax_invoice_issued === true,
+    notes: row.notes || '',
+  }
+}
+
+const resetForm = () => { editingId.value = null; form.value = emptyForm() }
+
+const saveRecord = async () => {
+  saveLoading.value = true
   try {
-    await api.post('/ecommerce/sales', {
-      company_id: selectedCompanyId.value,
-      period_id: selectedPeriodId.value,
-      ...form.value,
-    })
-    ElMessage.success('保存成功')
-    isSaved.value = true
-
-    // Auto-save VAT report
-    const gross = form.value.platform_sales - form.value.platform_refunds
-    const inclusive = form.value.is_vat_inclusive
-    const rate = form.value.vat_rate || 0.07
-    const netExVat = inclusive ? gross / (1 + rate) : gross
-    const vatSales = inclusive ? gross - netExVat : gross * rate
-
-    const deductible = form.value.platform_fees + form.value.advertising_fees + form.value.shipping_fees + form.value.cost_of_goods
-    const vatPurchases = deductible / (1 + rate) * rate + form.value.import_vat_paid
-    const netVat = vatSales - vatPurchases - creditForward.value
-
-    await api.post('/vat-report', {
-      company_id: selectedCompanyId.value,
-      period_id: selectedPeriodId.value,
-      sales_amount: Math.round(netExVat * 100) / 100,
-      vat_sales: Math.round(vatSales * 100) / 100,
-      vat_purchases: Math.round(vatPurchases * 100) / 100,
-      credit_forward: creditForward.value,
-      vat_payable: netVat > 0 ? Math.round(netVat * 100) / 100 : 0,
-      vat_credit_carry: netVat < 0 ? Math.round(Math.abs(netVat) * 100) / 100 : 0,
-      status: 'draft',
-    })
+    const payload = { company_id: selectedCompanyId.value, period_id: selectedPeriodId.value, ...form.value }
+    if (editingId.value) {
+      await api.put('/ecommerce/sales/' + editingId.value, payload)
+      ElMessage.success('已更新')
+    } else {
+      await api.post('/ecommerce/sales', payload)
+      ElMessage.success('已保存')
+    }
+    resetForm()
+    fetchList()
   } catch (e) {
     ElMessage.error(e.response?.data?.error || '保存失败')
-  } finally { saving.value = false }
+  } finally { saveLoading.value = false }
 }
 
-onMounted(fetchCompanies)
+const deleteRecord = async (row) => {
+  try {
+    await ElMessageBox.confirm('确认删除该记录？', '删除', { type: 'warning' })
+    await api.delete('/ecommerce/sales/' + row.id)
+    ElMessage.success('已删除')
+    if (editingId.value === row.id) resetForm()
+    fetchList()
+  } catch (e) { if (e !== 'cancel') ElMessage.error('删除失败') }
+}
+
+onMounted(() => store.loadCompanies?.())
 </script>

@@ -51,6 +51,10 @@ const companySchema = Joi.object({
 const ecommerceSaleSchema = Joi.object({
   company_id: Joi.number().integer().required(),
   period_id: Joi.number().integer().required(),
+  platform: Joi.string().allow('').max(50),
+  store_name: Joi.string().allow('').max(200),
+  order_date: Joi.date().allow(null),
+  order_no: Joi.string().allow('').max(100),
   platform_sales: Joi.number().min(0).allow(null),
   platform_refunds: Joi.number().min(0).allow(null),
   other_income: Joi.number().min(0).allow(null),
