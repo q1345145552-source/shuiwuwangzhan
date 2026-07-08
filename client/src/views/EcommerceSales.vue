@@ -24,7 +24,7 @@
         <!-- 1. 平台信息 -->
         <el-card style="margin-bottom:16px">
           <template #header>
-            <h3 style="margin:0;color:#409eff">🏪 平台信息</h3>
+            <h3 style="margin:0;color:#409eff"> 平台信息</h3>
           </template>
           <el-form label-width="140px" size="default">
             <el-form-item label="平台">
@@ -41,9 +41,9 @@
         <!-- 2. 销售收入 -->
         <el-card style="margin-bottom:16px">
           <template #header>
-            <h3 style="margin:0;color:#67c23a">💰 销售收入</h3>
+            <h3 style="margin:0;color:#67c23a"> 销售收入</h3>
           </template>
-          <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px" title="💡 提示">
+          <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px" title=" 提示">
             <template #default>
               <p style="margin:0;font-size:13px;line-height:1.8">
                 · <b>含税金额</b>：平台账单上的金额通常已包含 7% 增值税（VAT）。<br/>
@@ -81,7 +81,7 @@
         <!-- 3. 平台费用 -->
         <el-card style="margin-bottom:16px">
           <template #header>
-            <h3 style="margin:0;color:#e6a23c">🛒 平台费用</h3>
+            <h3 style="margin:0;color:#e6a23c"> 平台费用</h3>
           </template>
           <el-form label-width="140px" size="default">
             <el-form-item label="平台手续费">
@@ -99,7 +99,7 @@
         <!-- 4. 经营成本 -->
         <el-card style="margin-bottom:16px">
           <template #header>
-            <h3 style="margin:0;color:#f56c6c">🏢 经营成本</h3>
+            <h3 style="margin:0;color:#f56c6c"> 经营成本</h3>
           </template>
           <el-form label-width="140px" size="default">
             <el-form-item label="采购成本">
@@ -123,7 +123,7 @@
         <!-- 5. 进口 -->
         <el-card style="margin-bottom:16px">
           <template #header>
-            <h3 style="margin:0;color:#909399">🚢 进口</h3>
+            <h3 style="margin:0;color:#909399"> 进口</h3>
           </template>
           <el-form label-width="140px" size="default">
             <el-form-item label="进口VAT已缴">
@@ -140,9 +140,9 @@
         <!-- 6. 回款与开票 -->
         <el-card style="margin-bottom:16px">
           <template #header>
-            <h3 style="margin:0;color:#a855f7">💳 回款与开票</h3>
+            <h3 style="margin:0;color:#a855f7"> 回款与开票</h3>
           </template>
-          <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px" title="💡 提示">
+          <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px" title=" 提示">
             <template #default>
               <p style="margin:0;font-size:13px;line-height:1.8">
                 · <b>实际回款金额</b>：平台实际打到银行账户的金额（扣除平台手续费、退款等后）。<br/>
@@ -186,7 +186,7 @@
       <el-col :span="10">
         <el-card style="margin-bottom:16px;background:#f0f9ff">
           <template #header>
-            <h3 style="margin:0;color:#409eff">📈 VAT 对账汇总</h3>
+            <h3 style="margin:0;color:#409eff"> VAT 对账汇总</h3>
           </template>
           <el-table :data="vatSummary" :show-header="false" size="small" style="width:100%">
             <el-table-column prop="label" width="160" />
@@ -202,7 +202,7 @@
 
         <el-card style="margin-bottom:16px;background:#fef9e7">
           <template #header>
-            <h3 style="margin:0;color:#e6a23c">📊 利润预览</h3>
+            <h3 style="margin:0;color:#e6a23c"> 利润预览</h3>
           </template>
           <el-table :data="profitSummary" :show-header="false" size="small" style="width:100%">
             <el-table-column prop="label" width="160" />
@@ -218,7 +218,7 @@
 
         <!-- 快捷提示 -->
         <el-card>
-          <template #header><h4 style="margin:0">📝 录入指南</h4></template>
+          <template #header><h4 style="margin:0"> 录入指南</h4></template>
           <div style="font-size:13px;color:#666;line-height:2">
             <p><b>1.</b> 从 Shopee/Lazada Seller Center 导出月度账单</p>
             <p><b>2.</b> 将「订单收入」填入商品销售额</p>
