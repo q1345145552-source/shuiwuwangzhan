@@ -10,7 +10,9 @@ function calcProfitLoss(s) {
   const refunds = r2(s.platform_refunds);
   const otherInc = r2(s.other_income);
   const netSales = gross - refunds;
-  const netExVat = r2(netSales  / (1 + VAT_RATE));
+  const netExVat = s._net_ex_vat_override !== undefined
+    ? s._net_ex_vat_override
+    : r2(netSales  / (1 + VAT_RATE));
 
   const cogsVal = r2(s.cost_of_goods);
   const platformFees = r2(s.platform_fees);
@@ -57,13 +59,51 @@ router.get('/profit-loss', async (req, res, next) => {
       [company_id, period_id]
     );
 
-    const current = sales.rows.length > 0 ? calcProfitLoss(sales.rows[0]) : {
-      sales: { gross: 0, refunds: 0, other_income: 0, net: 0, net_ex_vat: 0 },
-      costs: { cogs: 0, platform_fees: 0, shipping: 0, advertising: 0, total: 0 },
-      expenses: { rent: 0, salary: 0, warehouse: 0, other: 0, total: 0 },
-      gross_profit: 0,
-      net_profit: 0,
-    };
+    let current;
+    if (sales.rows.length > 0) {
+      // Compute netExVat correctly for mixed inclusive/exclusive rows
+      let aggNetExVat = 0;
+      for (const r of sales.rows) {
+        const gross = parseFloat(r.platform_sales || 0) - parseFloat(r.platform_refunds || 0);
+        const inclusive = r.is_vat_inclusive !== false;
+        const rate = parseFloat(r.vat_rate) || VAT_RATE;
+        aggNetExVat += inclusive ? gross / (1 + rate) : gross;
+      }
+      const agg = {
+        _net_ex_vat_override: r2(aggNetExVat),
+        platform_sales: sumFields(sales.rows, 'platform_sales'),
+        platform_refunds: sumFields(sales.rows, 'platform_refunds'),
+        other_income: sumFields(sales.rows, 'other_income'),
+        shipping_income: sumFields(sales.rows, 'shipping_income'),
+        discounts: sumFields(sales.rows, 'discounts'),
+        platform_subsidy: sumFields(sales.rows, 'platform_subsidy'),
+        cost_of_goods: sumFields(sales.rows, 'cost_of_goods'),
+        platform_fees: sumFields(sales.rows, 'platform_fees'),
+        advertising_fees: sumFields(sales.rows, 'advertising_fees'),
+        shipping_fees: sumFields(sales.rows, 'shipping_fees'),
+        transaction_fee: sumFields(sales.rows, 'transaction_fee'),
+        wht_deducted: sumFields(sales.rows, 'wht_deducted'),
+        campaign_fee: sumFields(sales.rows, 'campaign_fee'),
+        affiliate_commission: sumFields(sales.rows, 'affiliate_commission'),
+        cod_fee: sumFields(sales.rows, 'cod_fee'),
+        rental_fees: sumFields(sales.rows, 'rental_fees'),
+        salary_fees: sumFields(sales.rows, 'salary_fees'),
+        warehouse_fees: sumFields(sales.rows, 'warehouse_fees'),
+        other_expenses: sumFields(sales.rows, 'other_expenses'),
+        import_vat_paid: sumFields(sales.rows, 'import_vat_paid'),
+        import_duty_paid: sumFields(sales.rows, 'import_duty_paid'),
+        actual_received: sumFields(sales.rows, 'actual_received'),
+      };
+      current = calcProfitLoss(agg);
+    } else {
+      current = {
+        sales: { gross: 0, refunds: 0, other_income: 0, net: 0, net_ex_vat: 0 },
+        costs: { cogs: 0, platform_fees: 0, shipping: 0, advertising: 0, total: 0 },
+        expenses: { rent: 0, salary: 0, warehouse: 0, other: 0, total: 0 },
+        gross_profit: 0,
+        net_profit: 0,
+      };
+    }
 
     // YTD: sum all periods from month 1 to current month of the same year
     const ytdRows = await pool.query(
@@ -93,8 +133,8 @@ router.get('/profit-loss', async (req, res, next) => {
       period: period.rows[0],
       ...current,
       ytd,
-      vat_sales_calculated: sales.rows.length > 0 ? r2(sales.rows[0].vat_sales_calculated) : 0,
-      vat_purchases_calculated: sales.rows.length > 0 ? r2(sales.rows[0].vat_purchases_calculated) : 0,
+      vat_sales_calculated: sumFields(sales.rows, 'vat_sales_calculated'),
+      vat_purchases_calculated: sumFields(sales.rows, 'vat_purchases_calculated'),
     });
   } catch (err) { next(err); }
 });
@@ -120,10 +160,16 @@ router.get('/vat-report', async (req, res, next) => {
     if (parseInt(outSum.rows[0].cnt) === 0) {
       const sales = await pool.query('SELECT * FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
       if (sales.rows.length > 0) {
-        const s = sales.rows[0];
-        salesAmount = r2((parseFloat(s.platform_sales) - parseFloat(s.platform_refunds))  / (1 + VAT_RATE));
-        vatSales = r2(s.vat_sales_calculated);
-        vatPurchases = r2(s.vat_purchases_calculated);
+        let totalNetSales = 0;
+        for (const r of sales.rows) {
+          const gross = parseFloat(r.platform_sales || 0) - parseFloat(r.platform_refunds || 0);
+          const inclusive = r.is_vat_inclusive !== false;
+          const rate = parseFloat(r.vat_rate) || VAT_RATE;
+          totalNetSales += inclusive ? gross / (1 + rate) : gross;
+        }
+        salesAmount = r2(totalNetSales);
+        vatSales = sumFields(sales.rows, 'vat_sales_calculated');
+        vatPurchases = sumFields(sales.rows, 'vat_purchases_calculated');
       }
     }
 
