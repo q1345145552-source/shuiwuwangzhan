@@ -16,15 +16,24 @@ router.get('/annual-data', async (req, res, next) => {
     const agg = await pool.query(
       `SELECT
         COALESCE(SUM(platform_sales - platform_refunds), 0)  / ${1 + VAT_RATE} as platform_revenue,
+        COALESCE(SUM(shipping_income), 0) as shipping_income,
+        COALESCE(SUM(discounts), 0) as discounts,
+        COALESCE(SUM(platform_subsidy), 0) as platform_subsidy,
         COALESCE(SUM(other_income), 0) as other_revenue,
         COALESCE(SUM(cost_of_goods), 0) as cost_of_goods,
         COALESCE(SUM(platform_fees), 0) as platform_fees,
         COALESCE(SUM(advertising_fees), 0) as advertising_fees,
         COALESCE(SUM(shipping_fees), 0) as shipping_fees,
+        COALESCE(SUM(transaction_fee), 0) as transaction_fee,
+        COALESCE(SUM(wht_deducted), 0) as wht_deducted,
+        COALESCE(SUM(campaign_fee), 0) as campaign_fee,
+        COALESCE(SUM(affiliate_commission), 0) as affiliate_commission,
+        COALESCE(SUM(cod_fee), 0) as cod_fee,
         COALESCE(SUM(rental_fees), 0) as rental_fees,
         COALESCE(SUM(salary_fees), 0) as salary_fees,
         COALESCE(SUM(warehouse_fees), 0) as warehouse_fees,
         COALESCE(SUM(other_expenses), 0) as other_expenses,
+        COALESCE(SUM(import_vat_paid), 0) as import_vat,
         COALESCE(SUM(import_duty_paid), 0) as import_duty,
         COUNT(*) as month_count
        FROM ecommerce_sales es
@@ -34,10 +43,15 @@ router.get('/annual-data', async (req, res, next) => {
     );
 
     const a = agg.rows[0];
-    const totalRevenue = r2(parseFloat(a.platform_revenue) + parseFloat(a.other_revenue));
+    const totalRevenue = r2(
+      parseFloat(a.platform_revenue) + parseFloat(a.shipping_income) - parseFloat(a.discounts)
+      + parseFloat(a.platform_subsidy) + parseFloat(a.other_revenue)
+    );
     const totalExpenses = r2(
       parseFloat(a.cost_of_goods) + parseFloat(a.platform_fees) + parseFloat(a.advertising_fees) +
-      parseFloat(a.shipping_fees) + parseFloat(a.rental_fees) + parseFloat(a.salary_fees) +
+      parseFloat(a.shipping_fees) + parseFloat(a.transaction_fee) + parseFloat(a.wht_deducted) +
+      parseFloat(a.campaign_fee) + parseFloat(a.affiliate_commission) + parseFloat(a.cod_fee) +
+      parseFloat(a.rental_fees) + parseFloat(a.salary_fees) +
       parseFloat(a.warehouse_fees) + parseFloat(a.other_expenses) + parseFloat(a.import_duty)
     );
     const netProfit = r2(totalRevenue - totalExpenses);
@@ -55,17 +69,26 @@ router.get('/annual-data', async (req, res, next) => {
       year: parseInt(year),
       total_revenue: totalRevenue,
       platform_revenue: r2(a.platform_revenue),
+      shipping_income: r2(a.shipping_income),
+      discounts: r2(a.discounts),
+      platform_subsidy: r2(a.platform_subsidy),
       other_revenue: r2(a.other_revenue),
       total_expenses: totalExpenses,
       cost_of_goods: r2(a.cost_of_goods),
       platform_fees: r2(a.platform_fees),
       advertising_fees: r2(a.advertising_fees),
       shipping_fees: r2(a.shipping_fees),
+      transaction_fee: r2(a.transaction_fee),
+      wht_deducted: r2(a.wht_deducted),
+      campaign_fee: r2(a.campaign_fee),
+      affiliate_commission: r2(a.affiliate_commission),
+      cod_fee: r2(a.cod_fee),
       rental_fees: r2(a.rental_fees),
       salary_fees: r2(a.salary_fees),
       warehouse_fees: r2(a.warehouse_fees),
       utility_fees: 0,
       other_expenses: r2(a.other_expenses),
+      import_vat: r2(a.import_vat),
       import_duty: r2(a.import_duty),
       net_profit: netProfit,
       months_with_data: parseInt(a.month_count),
@@ -92,7 +115,7 @@ router.post('/calculate-tax', async (req, res, next) => {
         let totalRevenue = profit;
         try {
           const revResult = await pool.query(
-            'SELECT COALESCE(SUM((platform_sales - platform_refunds)  / (1 + VAT_RATE)), 0) as total FROM ecommerce_sales WHERE company_id = $1',
+            'SELECT COALESCE(SUM((platform_sales - platform_refunds + COALESCE(shipping_income,0) - COALESCE(discounts,0) + COALESCE(platform_subsidy,0) + COALESCE(other_income,0))  / (1 + VAT_RATE)), 0) as total FROM ecommerce_sales WHERE company_id = $1',
             [company_id]
           );
           totalRevenue = parseFloat(revResult.rows[0]?.total) || profit;
