@@ -423,22 +423,22 @@ router.get('/notifications', async (req, res, next) => {
        FROM tax_calendar tc
        JOIN companies c ON c.id = tc.company_id
        WHERE tc.status = 'pending'
-         AND tc.due_date >= $${params.length + 1}
-         AND tc.due_date <= $${params.length + 2}
+         AND tc.deadline >= $${params.length + 1}
+         AND tc.deadline <= $${params.length + 2}
          ${whereCompany}
-       ORDER BY tc.due_date ASC`,
+       ORDER BY tc.deadline ASC`,
       [...params, today, threeDaysLater]
     );
 
     // Overdue
     const overdue = await pool.query(
       `SELECT tc.*, c.name as company_name,
-        (DATE '${today}' - tc.due_date) as overdue_days
+        (DATE '${today}' - tc.deadline) as overdue_days
        FROM tax_calendar tc
        JOIN companies c ON c.id = tc.company_id
        WHERE tc.status = 'overdue'
          ${whereCompany}
-       ORDER BY tc.due_date ASC`,
+       ORDER BY tc.deadline ASC`,
       params
     );
 
@@ -447,15 +447,15 @@ router.get('/notifications', async (req, res, next) => {
         type: 'deadline_soon',
         company: r.company_name,
         tax_type: r.tax_type,
-        due_date: r.due_date,
-        due_in_days: Math.ceil((new Date(r.due_date) - new Date()) / 86400000),
+        due_date: r.deadline,
+        due_in_days: Math.ceil((new Date(r.deadline) - new Date()) / 86400000),
         read: false,
       })),
       ...overdue.rows.map(r => ({
         type: 'overdue',
         company: r.company_name,
         tax_type: r.tax_type,
-        due_date: r.due_date,
+        due_date: r.deadline,
         overdue_days: parseInt(r.overdue_days) || 0,
         read: false,
       })),
