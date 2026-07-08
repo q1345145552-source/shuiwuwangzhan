@@ -84,6 +84,220 @@ function cleanAmount(val) {
   return r2(parseFloat(s)) || 0;
 }
 
+// ================ AI 智能字段映射引擎 ================
+// 系统标准字段定义（含中英文语义描述，供 AI 匹��用）
+const SYSTEM_STANDARD_FIELDS = [
+  { field: 'platform_sales',    labels: ['含税销售额','销售额','总金额','total amount','gross sales','order amount','revenue'], type: 'number' },
+  { field: 'platform_fees',     labels: ['平台佣金','佣金','commission fee','commission','platform commission','marketplace fee'], type: 'number' },
+  { field: 'advertising_fees',  labels: ['广告费','广告','advertising','ad spend','ads','marketing'], type: 'number' },
+  { field: 'shipping_fees',     labels: ['物流运费','运费支出','shipping cost','delivery fee','freight'], type: 'number' },
+  { field: 'shipping_income',   labels: ['运费收入','shipping income','shipping fee','delivery income','shipping charged'], type: 'number' },
+  { field: 'order_date',        labels: ['订单日期','日期','order date','order time','date','transaction date'], type: 'date' },
+  { field: 'order_no',          labels: ['订单号','订单编号','order id','order number','order no','transaction id'], type: 'string' },
+  { field: 'store_name',        labels: ['店铺名称','店铺','shop name','store','seller'], type: 'string' },
+  { field: 'platform_refunds',  labels: ['退款','退款金额','refund','refund amount','return'], type: 'number' },
+  { field: 'discounts',         labels: ['优惠折扣','折扣','discount','coupon','promotion'], type: 'number' },
+  { field: 'platform_subsidy',  labels: ['平台补贴','补贴','subsidy','rebate','platform subsidy','coin'], type: 'number' },
+  { field: 'other_income',      labels: ['其他收入','other income','misc income'], type: 'number' },
+  { field: 'transaction_fee',   labels: ['交易手续费','手续费','transaction fee','payment fee','processing fee','service fee'], type: 'number' },
+  { field: 'wht_deducted',      labels: ['预扣税','WHT','withholding tax','tax deducted'], type: 'number' },
+  { field: 'campaign_fee',      labels: ['活动服务费','活动费','campaign fee','promo fee'], type: 'number' },
+  { field: 'affiliate_commission', labels: ['达人佣金','达人','affiliate','koc','influencer','kol'], type: 'number' },
+  { field: 'cod_fee',           labels: ['COD手续费','COD','cash on delivery','cod fee'], type: 'number' },
+  { field: 'cost_of_goods',     labels: ['采购成本','成本','cost','cogs','purchase cost','supplier cost'], type: 'number' },
+  { field: 'product_name',      labels: ['商品名称','商品','product name','item name','product','sku name'], type: 'string' },
+  { field: 'customer_name',     labels: ['客户名称','买家','customer','buyer','buyer name','buyer username'], type: 'string' },
+  { field: 'quantity',          labels: ['数量','quantity','qty','count'], type: 'number' },
+  { field: 'unit_price',        labels: ['单价','unit price','item price','price'], type: 'number' },
+  { field: 'sku',               labels: ['SKU','sku','sku info','product code','item code'], type: 'string' },
+];
+
+// 文本相似度 (Dice coefficient on bigrams)
+function textSimilarity(a, b) {
+  const s1 = a.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+  const s2 = b.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+  if (s1 === s2) return 1.0;
+  if (!s1 || !s2) return 0;
+  const bigrams = s => { const r = new Set(); for (let i = 0; i < s.length - 1; i++) r.add(s.slice(i, i + 2)); return r; };
+  const b1 = bigrams(s1), b2 = bigrams(s2);
+  let intersection = 0;
+  for (const bg of b1) if (b2.has(bg)) intersection++;
+  const total = b1.size + b2.size;
+  return total === 0 ? 0 : (2 * intersection) / total;
+}
+
+// 判断一个值看起来像是日期
+function looksLikeDate(val) {
+  if (!val) return false;
+  const s = String(val).trim();
+  return /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(s) || /^\d{1,2}[-/]\d{1,2}[-/]\d{4}/.test(s) || /^\d{4}-\d{2}-\d{2}T/.test(s);
+}
+
+// 判断一个值看起来像是订单号
+function looksLikeOrderNo(val) {
+  if (!val) return false;
+  const s = String(val).trim();
+  return /^\d{10,20}$/.test(s) || /^[A-Z0-9]{8,30}$/.test(s) || /#\d+/.test(s);
+}
+
+// 判断一个值看起来像是SKU
+function looksLikeSku(val) {
+  if (!val) return false;
+  const s = String(val).trim();
+  return /^[A-Z0-9_-]{4,20}$/.test(s) && !/^\d{4}[-/]\d/.test(s);
+}
+
+// AI 智能映射主函数
+function aiMapColumns(csvHeaders, sampleRows, platformRule) {
+  const result = {};
+  const usedFields = new Set();
+
+  // Pre-analyze sample data
+  const sampleValues = {};
+  for (const h of csvHeaders) {
+    const vals = sampleRows.slice(0, 10).map(r => String(r[h] || '').trim()).filter(Boolean);
+    sampleValues[h] = vals;
+  }
+
+  // Pass 1: exact match from platform fieldMap
+  for (const h of csvHeaders) {
+    const exact = platformRule?.fieldMap?.[h];
+    if (exact) {
+      const stdField = translateToStandard(exact);
+      if (stdField && !usedFields.has(stdField)) {
+        result[h] = { field: stdField, confidence: 'exact', method: 'platform_rule' };
+        usedFields.add(stdField);
+      }
+    }
+  }
+
+  // Pass 2: header name fuzzy match against SYSTEM_STANDARD_FIELDS labels
+  for (const h of csvHeaders) {
+    if (result[h]) continue;
+    let bestField = null, bestScore = 0;
+    for (const sf of SYSTEM_STANDARD_FIELDS) {
+      if (usedFields.has(sf.field)) continue;
+      for (const label of sf.labels) {
+        const score = textSimilarity(h, label);
+        // Also check if header contains the label or vice versa (keyword match)
+        const hLow = h.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+        const lLow = label.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]/g, '');
+        const contains = hLow.includes(lLow) || lLow.includes(hLow);
+        const combined = Math.max(score, contains ? 0.75 : 0);
+        if (combined > bestScore) { bestScore = combined; bestField = sf.field; }
+      }
+    }
+    if (bestField && bestScore >= 0.5) {
+      result[h] = { field: bestField, confidence: bestScore >= 0.85 ? 'high' : 'medium', method: 'fuzzy_match', score: Math.round(bestScore * 100) };
+      usedFields.add(bestField);
+    }
+  }
+
+  // Pass 3: sample data pattern match for remaining columns
+  for (const h of csvHeaders) {
+    if (result[h]) continue;
+    const vals = sampleValues[h] || [];
+    if (vals.length === 0) continue;
+
+    // Date detection
+    const dateRatio = vals.filter(looksLikeDate).length / vals.length;
+    if (dateRatio > 0.7) {
+      const candidates = ['order_date'];
+      for (const cand of candidates) {
+        if (!usedFields.has(cand)) {
+          result[h] = { field: cand, confidence: 'high', method: 'pattern_date' };
+          usedFields.add(cand);
+          break;
+        }
+      }
+      continue;
+    }
+
+    // Order number detection
+    const onRatio = vals.filter(looksLikeOrderNo).length / vals.length;
+    if (onRatio > 0.6) {
+      if (!usedFields.has('order_no')) {
+        result[h] = { field: 'order_no', confidence: 'high', method: 'pattern_orderno' };
+        usedFields.add('order_no');
+        continue;
+      }
+    }
+
+    // SKU detection
+    const skuRatio = vals.filter(looksLikeSku).length / vals.length;
+    if (skuRatio > 0.5 && !/name|名称|product|item|商品/i.test(h)) {
+      if (!usedFields.has('sku')) {
+        result[h] = { field: 'sku', confidence: 'medium', method: 'pattern_sku' };
+        usedFields.add('sku');
+        continue;
+      }
+    }
+
+    // Numeric detection for amount columns
+    const numVals = vals.map(v => parseFloat(String(v).replace(/[^\d.-]/g, ''))).filter(v => !isNaN(v) && v !== 0);
+    if (numVals.length > 0 && numVals.length / vals.length > 0.5) {
+      const avg = numVals.reduce((s, v) => s + v, 0) / numVals.length;
+      // Large amounts → platform_sales
+      if (avg > 100 && !usedFields.has('platform_sales')) {
+        result[h] = { field: 'platform_sales', confidence: 'medium', method: 'pattern_amount_large' };
+        usedFields.add('platform_sales');
+        continue;
+      }
+      // Moderate amounts → platform_fees or transaction_fee
+      if (avg > 5 && avg <= 200 && !usedFields.has('platform_fees')) {
+        result[h] = { field: 'platform_fees', confidence: 'low', method: 'pattern_amount_medium' };
+        usedFields.add('platform_fees');
+        continue;
+      }
+    }
+  }
+
+  // Pass 4: mark unmatched
+  for (const h of csvHeaders) {
+    if (!result[h]) {
+      result[h] = { field: null, confidence: 'none', method: 'unmatched' };
+    }
+  }
+
+  return result;
+}
+
+// 平台字段名 → 标准字段名 转换
+function translateToStandard(platformField) {
+  const map = {
+    'total_amount': 'platform_sales',
+    'platform_fee': 'platform_fees',
+    'shipping_fee': 'shipping_income',
+    'shipping_cost': 'shipping_fees',
+    'other_fee': 'transaction_fee',
+    'order_id': 'order_no',
+    'order_date': 'order_date',
+    'customer_name': 'customer_name',
+    'product_name': 'product_name',
+    'sku': 'sku',
+    'quantity': 'quantity',
+    'unit_price': 'unit_price',
+    'net_amount': 'platform_sales',
+    'commission': 'platform_fees',
+    'advertising': 'advertising_fees',
+    'refund': 'platform_refunds',
+    'discount': 'discounts',
+    'order_number': 'order_no',
+    'order_time': 'order_date',
+    'buyer_name': 'customer_name',
+    'buyer_username': 'customer_name',
+    'item_name': 'product_name',
+    'sku_info': 'sku',
+    'transaction_fee': 'transaction_fee',
+    'payment_fee': 'transaction_fee',
+    'service_fee': 'campaign_fee',
+    'cod_fee': 'cod_fee',
+    'wht': 'wht_deducted',
+  };
+  return map[platformField] || null;
+}
+
+
 function parseCsvBuffer(buffer) {
   const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
   const result = Papa.parse(text, { header: true, skipEmptyLines: true, trimHeaders: true });
@@ -99,6 +313,39 @@ router.get('/templates', (req, res) => {
       fields: Object.keys(r.fieldMap)
     }))
   );
+});
+
+// POST /api/platform-import/ai-map — AI 智能字段映射
+router.post('/ai-map', upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: '请上传CSV文件' });
+
+    const { headers, rows } = parseCsvBuffer(req.file.buffer);
+    if (!headers.length || !rows.length) return res.status(400).json({ error: 'CSV文件为空或格式不正确' });
+
+    const detected = detectPlatform(headers);
+    const platformRule = detected || PLATFORM_RULES[0];
+
+    const aiResult = aiMapColumns(headers, rows, platformRule);
+
+    // Return standard fields list with descriptions for frontend
+    const standardFields = SYSTEM_STANDARD_FIELDS.map(f => ({
+      value: f.field,
+      label: f.labels[0],
+      desc: f.labels.slice(0, 3).join(' / '),
+      type: f.type,
+    }));
+
+    res.json({
+      platform_detected: platformRule.platform,
+      platform_name: platformRule.name,
+      ai_mapping: aiResult,
+      all_headers: headers,
+      standard_fields: standardFields,
+      total_rows: rows.length,
+      filename: req.file.originalname,
+    });
+  } catch (e) { next(e); }
 });
 
 // POST /api/platform-import/preview — 上传CSV预览
@@ -133,12 +380,16 @@ router.post('/preview', upload.single('file'), async (req, res, next) => {
       return cleaned;
     });
 
+    // Run AI smart mapping on top of platform rules
+    const aiMapping = aiMapColumns(headers, rows, detected || undefined);
+
     res.json({
       platform_detected: platform.platform,
       platform_name: platform.name,
       columns_matched: columnsMatched,
+      ai_mapping: aiMapping,
       all_headers: headers,
-      standard_fields: platform.fieldMap,
+      standard_fields: SYSTEM_STANDARD_FIELDS.map(f => ({ value: f.field, label: f.labels[0], desc: f.labels.slice(0, 3).join(' / '), type: f.type })),
       preview_rows: previewRows,
       total_rows: rows.length,
       filename: req.file.originalname

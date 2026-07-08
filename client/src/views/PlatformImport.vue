@@ -31,20 +31,41 @@
       </div>
     </el-card>
 
-    <!-- Step 2: Preview mapping -->
+    <!-- Step 2: AI 智能字段映射 -->
     <el-card v-if="step >= 2" style="margin-bottom:16px">
-      <template #header><span :class="step>=2 ? 'step-active' : ''">Step 2 — 字段映射 & 数据预览</span></template>
+      <template #header>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span :class="step>=2 ? 'step-active' : ''">Step 2 — 字段映射 & 数据预览</span>
+          <el-button size="small" text @click="remapWithAI" :loading="remapping">重新识别</el-button>
+        </div>
+      </template>
+      <el-alert type="success" :closable="false" show-icon style="margin-bottom:12px">
+        AI 已自动识别字段对应关系，请检查确认。不确定的列会标记为"待确认"。
+      </el-alert>
       <el-table :data="columnMapping" border size="small" style="margin-bottom:16px">
-        <el-table-column prop="csvHeader" label="CSV 列名" width="220" />
-        <el-table-column label="系统字段" width="220">
-          <template #default="{ row }">
-            <el-select v-model="row.mappedTo" size="small" placeholder="选择映射">
-              <el-option label="(忽略)" value="" />
-              <el-option v-for="f in standardFields" :key="f.value" :label="f.label" :value="f.value" />
-            </el-select>
+        <el-table-column prop="csvHeader" label="CSV 列名" width="200" />
+        <el-table-column label="系统字段 / 映射结果" min-width="280">
+          <template #default="{ row, $index }">
+            <template v-if="!row.editing">
+              <el-tag v-if="row.mappedTo" :type="row.confidence === 'high' || row.confidence === 'exact' ? 'success' : row.confidence === 'medium' ? 'warning' : 'info'" size="small" effect="plain">
+                {{ getFieldLabel(row.mappedTo) }}
+              </el-tag>
+              <el-tag v-else type="danger" size="small" effect="plain">待确认</el-tag>
+              <span v-if="row.confidence === 'exact'" style="color:#67c23a;font-size:11px;margin-left:6px">精准</span>
+              <span v-else-if="row.confidence === 'high'" style="color:#409eff;font-size:11px;margin-left:6px">高</span>
+              <span v-else-if="row.confidence === 'medium'" style="color:#e6a23c;font-size:11px;margin-left:6px">中</span>
+              <el-button link type="primary" size="small" style="margin-left:8px" @click="startEditMapping($index)">修正</el-button>
+            </template>
+            <template v-else>
+              <el-select v-model="row.mappedTo" size="small" placeholder="选择字段" style="width:180px" @change="row.editing = false">
+                <el-option label="(忽略此列)" value="" />
+                <el-option v-for="f in standardFields" :key="f.value" :label="f.label + ' (' + f.desc + ')'" :value="f.value" />
+              </el-select>
+              <el-button link size="small" style="margin-left:4px" @click="row.editing = false">取消</el-button>
+            </template>
           </template>
         </el-table-column>
-        <el-table-column label="预览值" min-width="200">
+        <el-table-column label="预览值" min-width="160">
           <template #default="{ row }">{{ row.previewValue }}</template>
         </el-table-column>
       </el-table>
@@ -175,6 +196,39 @@ const selectedPeriodLabel = computed(() => {
 
 function formatNum(n) { return (parseFloat(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
+const remapping = ref(false)
+
+function getFieldLabel(field) {
+  const f = standardFields.value.find(x => x.value === field)
+  return f ? f.label : field
+}
+
+function startEditMapping(idx) {
+  columnMapping.value[idx].editing = true
+}
+
+async function remapWithAI() {
+  if (!csvFile.value) return
+  remapping.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', csvFile.value)
+    formData.append('company_id', companyId.value)
+    const data = await api.post('/platform-import/ai-map', formData)
+    const aiMap = data.ai_mapping || {}
+    for (const row of columnMapping.value) {
+      const ai = aiMap[row.csvHeader]
+      if (ai?.field) {
+        row.mappedTo = ai.field
+        row.confidence = ai.confidence
+      }
+    }
+    ElMessage.success('AI 重新映射完成')
+  } catch (e) {
+    ElMessage.warning('AI 映射失败，请手动调整: ' + (e.response?.data?.error || e.message))
+  } finally { remapping.value = false }
+}
+
 const uploadRef = ref(null)
 
 function formatTime(t) { return t ? new Date(t).toLocaleString('zh-CN') : '-' }
@@ -208,14 +262,23 @@ async function onFileChange(file) {
     platformName.value = data.platform_name
     totalRows.value = data.total_rows
     allHeaders.value = data.all_headers
-    standardFields.value = Object.entries(data.standard_fields || {}).map(([k,v]) => ({ label: k, value: v }))
+    standardFields.value = (data.standard_fields || []).map(f => ({ value: f.value, label: f.label, desc: f.desc }))
 
-    // Build column mapping
+    // Build column mapping from AI results
+    const aiMap = data.ai_mapping || {}
     const mapping = []
     for (const h of data.all_headers) {
-      const matched = data.columns_matched[h] || ''
-      const previewVal = data.preview_rows[0]?.[h] || ''
-      mapping.push({ csvHeader: h, mappedTo: matched, previewValue: String(previewVal).slice(0, 40) })
+      const ai = aiMap[h]
+      const matched = ai?.field || ''
+      const confidence = ai?.confidence || 'none'
+      const previewVal = data.preview_rows?.[0]?.[h] || ''
+      mapping.push({
+        csvHeader: h,
+        mappedTo: matched,
+        confidence: confidence,
+        previewValue: String(previewVal).slice(0, 40),
+        editing: false,
+      })
     }
     columnMapping.value = mapping
 
