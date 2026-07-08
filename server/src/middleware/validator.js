@@ -35,9 +35,15 @@ const companySchema = Joi.object({
     'number.max': '月服务费不能超过999999',
   }),
   business_type: Joi.string().allow('').max(100),
-  platforms: Joi.string().allow('').max(200),
+  platforms: Joi.alternatives().try(
+    Joi.string().allow('').max(200),
+    Joi.array().items(Joi.string()).max(20)
+  ),
   service_start_date: Joi.date().allow(null),
-  tags: Joi.string().allow('').max(200),
+  tags: Joi.alternatives().try(
+    Joi.string().allow('').max(200),
+    Joi.array().items(Joi.string()).max(20)
+  ),
   thai_address: Joi.string().allow('').max(500),
 });
 
