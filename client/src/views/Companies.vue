@@ -132,7 +132,7 @@ const tagsStr = ref('')
 
 const empForm = () => ({
   id: null, code: '', name: '', tax_id: '', vat_number: '', vat_registered: false,
-  address: '', director: '', contacts: '', accounting_start: '',
+  address: '', director: '', contacts: '[]', accounting_start: '',
   contact_person: '', phone: '', wechat: '', email: '',
   address_th: '', address_en: '', business_type: '', platforms: [],
   logo_url: '', service_start_date: '', monthly_service_fee: null, last_contact_date: '', notes: ''
@@ -170,7 +170,7 @@ function openDialog(row) {
     Object.assign(form, {
       id: row.id, code: row.code||'', name: row.name||'', tax_id: row.tax_id||'',
       vat_number: row.vat_number||'', vat_registered: row.vat_registered||false,
-      address: row.address||'', director: row.director||'', contacts: row.contacts||'',
+      address: row.address||'', director: row.director||'', contacts: row.contacts||'[]',
       accounting_start: row.accounting_start||'',
       contact_person: row.contact_person||'', phone: row.phone||'', wechat: row.wechat||'', email: row.email||'',
       address_th: row.address_th||'', address_en: row.address_en||'',

@@ -31,9 +31,10 @@ router.post('/', validate(companySchema), async (req, res, next) => {
     const exists = await pool.query('SELECT id FROM companies WHERE code=$1', [code]);
     if (exists.rows.length) return res.status(409).json({ error: '公司编号已存在' });
 
+    const safeContacts = (typeof contacts === 'string' && contacts.trim() !== '') ? contacts : null;
     const r = await pool.query(
       `INSERT INTO companies (${ALL_COMPANY_FIELDS}) VALUES (${COMPANY_VALUES}) RETURNING *`,
-      [code, name, tax_id, vat_number, vat_registered||false, address, director, contacts, accounting_start||'2025-01-01',
+      [code, name, tax_id, vat_number, vat_registered||false, address, director, safeContacts, accounting_start||'2025-01-01',
        contact_person, phone, wechat, email, address_th, address_en, business_type, platforms, tags,
        logo_url, service_start_date, monthly_service_fee?parseFloat(monthly_service_fee):null, last_contact_date, notes]
     );
@@ -54,9 +55,10 @@ router.put('/:id', validate(companySchema), async (req, res, next) => {
     const exists = await pool.query('SELECT id FROM companies WHERE code=$1 AND id!=$2', [code, id]);
     if (exists.rows.length) return res.status(409).json({ error: '公司编号已存在' });
 
+    const safeContacts = (typeof contacts === 'string' && contacts.trim() !== '') ? contacts : null;
     const r = await pool.query(
       `UPDATE companies SET code=$1,name=$2,tax_id=$3,vat_number=$4,vat_registered=$5,address=$6,director=$7,contacts=$8,accounting_start=$9,contact_person=$10,phone=$11,wechat=$12,email=$13,address_th=$14,address_en=$15,business_type=$16,platforms=$17,tags=$18,logo_url=$19,service_start_date=$20,monthly_service_fee=$21,last_contact_date=$22,notes=$23,updated_at=NOW() WHERE id=$24 RETURNING *`,
-      [code,name,tax_id,vat_number,vat_registered||false,address,director,contacts,accounting_start,contact_person,phone,wechat,email,address_th,address_en,business_type,platforms,tags,logo_url,service_start_date,monthly_service_fee?parseFloat(monthly_service_fee):null,last_contact_date,notes,id]
+      [code,name,tax_id,vat_number,vat_registered||false,address,director,safeContacts,accounting_start,contact_person,phone,wechat,email,address_th,address_en,business_type,platforms,tags,logo_url,service_start_date,monthly_service_fee?parseFloat(monthly_service_fee):null,last_contact_date,notes,id]
     );
     if (!r.rows.length) return res.status(404).json({ error: '公司不存在' });
     logAudit({ company_id: parseInt(id), action: 'update', entity_type: 'company', entity_id: parseInt(id), description: `编辑客户公司：${name}`, old_value: oldCompany.rows[0]||{}, new_value:{code,name,tax_id}, req });
