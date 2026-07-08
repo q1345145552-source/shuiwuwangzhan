@@ -139,10 +139,14 @@
             <el-button size="small" @click="addCustomDeduction">+ 添加</el-button>
           </div>
           <div v-if="customDeductions.length === 0" style="color:#c0c4cc;font-size:12px;padding:4px 0">暂无自定义扣费项</div>
-          <div v-for="(item, idx) in customDeductions" :key="idx" style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-            <el-input v-model="item.name" placeholder="费用名称" size="small" style="width:140px" />
-            <el-input v-model.number="item.amount" type="number" step="0.01" placeholder="金额" size="small" style="width:110px" />
-            <el-input v-model="item.notes" placeholder="备注（必填）" size="small" style="width:200px" />
+          <div v-for="(item, idx) in customDeductions" :key="idx" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
+            <el-input v-model="item.name" placeholder="费用名称" size="small" style="width:130px" />
+            <el-input v-model.number="item.amount" type="number" step="0.01" placeholder="金额" size="small" style="width:100px" />
+            <el-radio-group v-model="item.is_vat_inclusive" size="small">
+              <el-radio-button :value="true">含税</el-radio-button>
+              <el-radio-button :value="false">未税</el-radio-button>
+            </el-radio-group>
+            <el-input v-model="item.notes" placeholder="备注" size="small" style="width:180px" />
             <el-button link type="danger" size="small" @click="customDeductions.splice(idx,1)">删除</el-button>
           </div>
         </div>
@@ -357,12 +361,12 @@ const editRecord = (row) => {
   }
   let cd = row.custom_deductions
   if (typeof cd === 'string') { try { cd = JSON.parse(cd) } catch(e) { cd = [] } }
-  customDeductions.value = Array.isArray(cd) ? [...cd] : []
+  customDeductions.value = Array.isArray(cd) ? cd.map(c => ({ ...c, is_vat_inclusive: c.is_vat_inclusive !== false })) : []
 }
 
 const resetForm = () => { editingId.value = null; form.value = emptyForm(); customDeductions.value = [] }
 
-const addCustomDeduction = () => { customDeductions.value.push({ name: '', amount: null, notes: '' }) }
+const addCustomDeduction = () => { customDeductions.value.push({ name: '', amount: null, notes: '', is_vat_inclusive: true }) }
 
 const saveRecord = async () => {
   saveLoading.value = true

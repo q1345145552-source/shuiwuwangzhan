@@ -23,13 +23,14 @@ function parseBody(body) {
   } else {
     v.vat_sales_calculated = Math.round(gross * v.vat_rate * 100) / 100;
   }
-  v.custom_deductions = body.custom_deductions;
-  if (typeof v.custom_deductions === 'string') {
-    try { v.custom_deductions = JSON.parse(v.custom_deductions); } catch(e) { v.custom_deductions = []; }
+  let cdArr = body.custom_deductions;
+  if (typeof cdArr === 'string') {
+    try { cdArr = JSON.parse(cdArr); } catch(e) { cdArr = []; }
   }
-  if (!Array.isArray(v.custom_deductions)) v.custom_deductions = [];
-  v.custom_deductions = JSON.stringify(v.custom_deductions);
-  const ded = v.platform_fees + v.advertising_fees + v.shipping_fees + v.transaction_fee + v.wht_deducted + v.campaign_fee + v.affiliate_commission + v.cod_fee + v.cost_of_goods;
+  if (!Array.isArray(cdArr)) cdArr = [];
+  v.custom_deductions = JSON.stringify(cdArr);
+  const customDed_VAT_inclusive = cdArr.filter(c => c.is_vat_inclusive !== false).reduce((s, c) => s + (parseFloat(c.amount) || 0), 0);
+  const ded = v.platform_fees + v.advertising_fees + v.shipping_fees + v.transaction_fee + v.wht_deducted + v.campaign_fee + v.affiliate_commission + v.cod_fee + v.cost_of_goods + customDed_VAT_inclusive;
   v.vat_purchases_calculated = Math.round((ded / (1 + v.vat_rate) * v.vat_rate + v.import_vat_paid) * 100) / 100;
   return v;
 }
@@ -112,7 +113,9 @@ router.post('/calculate', async (req, res, next) => {
     let net, vat;
     if (incl) { net = Math.round(gross/(1+rate)*100)/100; vat = Math.round((gross-net)*100)/100; }
     else { vat = Math.round(gross*rate*100)/100; net = gross; }
-    const ded = parseFloat(platform_fees||0)+parseFloat(advertising_fees||0)+parseFloat(shipping_fees||0)+parseFloat(cost_of_goods||0);
+    const cdArr = req.body.custom_deductions || [];
+    const customDedVatInc = (Array.isArray(cdArr) ? cdArr : []).filter(c => c && c.is_vat_inclusive !== false).reduce((s,c) => s + (parseFloat(c.amount)||0), 0);
+    const ded = parseFloat(platform_fees||0)+parseFloat(advertising_fees||0)+parseFloat(shipping_fees||0)+parseFloat(cost_of_goods||0)+customDedVatInc;
     const vatPur = Math.round((ded/(1+rate)*rate+parseFloat(import_vat_paid||0))*100)/100;
     res.json({ gross_sales: gross, net_sales_ex_vat: net, vat_sales: vat, vat_purchases: vatPur, net_vat: Math.round((vat-vatPur)*100)/100 });
   } catch (e) { next(e); }
