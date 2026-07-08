@@ -56,23 +56,23 @@
         <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
           <div style="width:130px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">销售额</div>
-            <el-input-number v-model="form.platform_sales" :min="0" :precision="2" controls-position="right" style="width:130px" />
+            <el-input v-model.number="form.platform_sales" type="number" step="0.01" placeholder="" style="width:130px" />
           </div>
           <div style="width:100px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">运费收入</div>
-            <el-input-number v-model="form.shipping_income" :min="0" :precision="2" controls-position="right" style="width:100px" />
+            <el-input v-model.number="form.shipping_income" type="number" step="0.01" placeholder="" style="width:100px" />
           </div>
           <div style="width:90px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">折扣</div>
-            <el-input-number v-model="form.discounts" :min="0" :precision="2" controls-position="right" style="width:90px" />
+            <el-input v-model.number="form.discounts" type="number" step="0.01" placeholder="" style="width:90px" />
           </div>
           <div style="width:100px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">退款</div>
-            <el-input-number v-model="form.platform_refunds" :min="0" :precision="2" controls-position="right" style="width:100px" />
+            <el-input v-model.number="form.platform_refunds" type="number" step="0.01" placeholder="" style="width:100px" />
           </div>
           <div style="width:90px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">VAT 税率</div>
-            <el-input-number v-model="form.vat_rate" :min="0" :max="1" :precision="4" :step="0.01" controls-position="right" style="width:90px" size="small" />
+            <div style="padding-top:4px;font-weight:bold">7%</div>
           </div>
           <div style="background:#f5f7fa;padding:6px 12px;border-radius:4px;font-size:12px;text-align:center">
             <span style="color:#909399">未税 {{ fmt(vatPreview.netExVat) }}</span>
@@ -84,23 +84,23 @@
         <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
           <div style="width:110px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">平台手续费</div>
-            <el-input-number v-model="form.platform_fees" :min="0" :precision="2" controls-position="right" style="width:110px" />
+            <el-input v-model.number="form.platform_fees" type="number" step="0.01" placeholder="" style="width:110px" />
           </div>
           <div style="width:90px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">广告费</div>
-            <el-input-number v-model="form.advertising_fees" :min="0" :precision="2" controls-position="right" style="width:90px" />
+            <el-input v-model.number="form.advertising_fees" type="number" step="0.01" placeholder="" style="width:90px" />
           </div>
           <div style="width:90px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">物流费</div>
-            <el-input-number v-model="form.shipping_fees" :min="0" :precision="2" controls-position="right" style="width:90px" />
+            <el-input v-model.number="form.shipping_fees" type="number" step="0.01" placeholder="" style="width:90px" />
           </div>
           <div style="width:110px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">采购成本</div>
-            <el-input-number v-model="form.cost_of_goods" :min="0" :precision="2" controls-position="right" style="width:110px" />
+            <el-input v-model.number="form.cost_of_goods" type="number" step="0.01" placeholder="" style="width:110px" />
           </div>
           <div style="width:130px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">实际回款</div>
-            <el-input-number v-model="form.actual_received" :min="0" :precision="2" controls-position="right" style="width:130px" />
+            <el-input v-model.number="form.actual_received" type="number" step="0.01" placeholder="" style="width:130px" />
           </div>
           <div style="width:100px">
             <div style="font-size:12px;color:#666;margin-bottom:4px">回款状态</div>
@@ -230,12 +230,12 @@ const isPeriodLocked = computed(() => {
 
 const emptyForm = () => ({
   platform: '', store_name: '', order_date: '', order_no: '',
-  platform_sales: 0, shipping_income: 0, discounts: 0, platform_refunds: 0,
+  platform_sales: null, shipping_income: null, discounts: null, platform_refunds: null,
   is_vat_inclusive: true, vat_rate: 0.07,
-  platform_fees: 0, advertising_fees: 0, shipping_fees: 0, cost_of_goods: 0,
-  rental_fees: 0, salary_fees: 0, warehouse_fees: 0, other_expenses: 0,
-  import_vat_paid: 0, import_duty_paid: 0,
-  actual_received: 0, collection_status: 'uncollected', tax_invoice_issued: false, notes: '',
+  platform_fees: null, advertising_fees: null, shipping_fees: null, cost_of_goods: null,
+  rental_fees: null, salary_fees: null, warehouse_fees: null, other_expenses: null,
+  import_vat_paid: null, import_duty_paid: null,
+  actual_received: null, collection_status: 'uncollected', tax_invoice_issued: false, notes: '',
 })
 
 const form = ref(emptyForm())
@@ -290,23 +290,23 @@ const editRecord = (row) => {
   form.value = {
     platform: row.platform || '', store_name: row.store_name || '',
     order_date: row.order_date || '', order_no: row.order_no || '',
-    platform_sales: parseFloat(row.platform_sales) || 0,
-    shipping_income: parseFloat(row.shipping_income) || 0,
-    discounts: parseFloat(row.discounts) || 0,
-    platform_refunds: parseFloat(row.platform_refunds) || 0,
+    platform_sales: parseFloat(row.platform_sales) || null,
+    shipping_income: parseFloat(row.shipping_income) || null,
+    discounts: parseFloat(row.discounts) || null,
+    platform_refunds: parseFloat(row.platform_refunds) || null,
     is_vat_inclusive: row.is_vat_inclusive !== false,
     vat_rate: parseFloat(row.vat_rate) || 0.07,
-    platform_fees: parseFloat(row.platform_fees) || 0,
-    advertising_fees: parseFloat(row.advertising_fees) || 0,
-    shipping_fees: parseFloat(row.shipping_fees) || 0,
-    cost_of_goods: parseFloat(row.cost_of_goods) || 0,
-    rental_fees: parseFloat(row.rental_fees) || 0,
-    salary_fees: parseFloat(row.salary_fees) || 0,
-    warehouse_fees: parseFloat(row.warehouse_fees) || 0,
-    other_expenses: parseFloat(row.other_expenses) || 0,
-    import_vat_paid: parseFloat(row.import_vat_paid) || 0,
-    import_duty_paid: parseFloat(row.import_duty_paid) || 0,
-    actual_received: parseFloat(row.actual_received) || 0,
+    platform_fees: parseFloat(row.platform_fees) || null,
+    advertising_fees: parseFloat(row.advertising_fees) || null,
+    shipping_fees: parseFloat(row.shipping_fees) || null,
+    cost_of_goods: parseFloat(row.cost_of_goods) || null,
+    rental_fees: parseFloat(row.rental_fees) || null,
+    salary_fees: parseFloat(row.salary_fees) || null,
+    warehouse_fees: parseFloat(row.warehouse_fees) || null,
+    other_expenses: parseFloat(row.other_expenses) || null,
+    import_vat_paid: parseFloat(row.import_vat_paid) || null,
+    import_duty_paid: parseFloat(row.import_duty_paid) || null,
+    actual_received: parseFloat(row.actual_received) || null,
     collection_status: row.collection_status || 'uncollected',
     tax_invoice_issued: row.tax_invoice_issued === true,
     notes: row.notes || '',
