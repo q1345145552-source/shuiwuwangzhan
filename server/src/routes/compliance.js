@@ -116,15 +116,15 @@ router.get('/calendar', async (req, res, next) => {
     const result = await pool.query(
       `SELECT * FROM tax_calendar
        WHERE company_id = $1 AND period_year = $2
-       ORDER BY due_date`,
+       ORDER BY deadline`,
       [company_id, year]
     );
 
     // 把逾期的算一下滞纳金
     const today = new Date();
     const items = result.rows.map(row => {
-      if (row.status === 'pending' && new Date(row.due_date) < today) {
-        const calc = calculatePenalty(1, row.due_date, today);
+      if (row.status === 'pending' && new Date(row.deadline) < today) {
+        const calc = calculatePenalty(1, row.deadline, today);
         return { ...row, overdue_days: calc.overdue_days };
       }
       return row;
@@ -221,10 +221,10 @@ router.post('/calendar/generate', async (req, res, next) => {
     const inserted = [];
     for (const entry of entries) {
       const result = await pool.query(
-        `INSERT INTO tax_calendar (company_id, tax_type, tax_name, due_date, period_year, period_month)
+        `INSERT INTO tax_calendar (company_id, tax_type, tax_name, deadline, period_year, period_month)
          VALUES ($1,$2,$3,$4,$5,$6)
          ON CONFLICT (company_id, tax_type, period_year, period_month) DO UPDATE SET
-           tax_name = EXCLUDED.tax_name, due_date = EXCLUDED.due_date
+           tax_name = EXCLUDED.tax_name, deadline = EXCLUDED.deadline
          RETURNING *`,
         [entry.company_id, entry.tax_type, entry.tax_name, entry.due_date,
          entry.period_year, entry.period_month]
@@ -249,13 +249,13 @@ router.get('/upcoming', async (req, res, next) => {
     const result = await pool.query(
       `SELECT * FROM tax_calendar
        WHERE company_id = $1 AND status = 'pending'
-         AND due_date BETWEEN $2 AND $3
-       ORDER BY due_date`,
+         AND deadline BETWEEN $2 AND $3
+       ORDER BY deadline`,
       [company_id, today.toISOString().slice(0, 10), future.toISOString().slice(0, 10)]
     );
 
     const items = result.rows.map(row => {
-      const daysLeft = Math.ceil((new Date(row.due_date) - today) / (1000 * 60 * 60 * 24));
+      const daysLeft = Math.ceil((new Date(row.deadline) - today) / (1000 * 60 * 60 * 24));
       return { ...row, days_left: daysLeft };
     });
 
@@ -272,13 +272,13 @@ router.get('/overdue', async (req, res, next) => {
 
     const result = await pool.query(
       `SELECT * FROM tax_calendar
-       WHERE company_id = $1 AND status = 'pending' AND due_date < $2
-       ORDER BY due_date`,
+       WHERE company_id = $1 AND status = 'pending' AND deadline < $2
+       ORDER BY deadline`,
       [company_id, today]
     );
 
     const items = result.rows.map(row => {
-      const calc = calculatePenalty(1, row.due_date, today);
+      const calc = calculatePenalty(1, row.deadline, today);
       return { ...row, overdue_days: calc.overdue_days };
     });
 

@@ -22,19 +22,19 @@ router.get('/summary', async (req, res, next) => {
       FROM tax_calendar tc
       JOIN companies c ON c.id = tc.company_id
       WHERE tc.status = 'pending'
-        AND tc.due_date >= CURRENT_DATE
-        AND tc.due_date <= CURRENT_DATE + INTERVAL '7 days'
-      ORDER BY tc.due_date ASC
+        AND tc.deadline >= CURRENT_DATE
+        AND tc.deadline <= CURRENT_DATE + INTERVAL '7 days' + INTERVAL '7 days'
+      ORDER BY tc.deadline ASC
     `);
 
     // Overdue items
     const overdueItems = await pool.query(`
       SELECT tc.*, c.name as company_name,
-        (CURRENT_DATE - tc.due_date) as overdue_days
+        (CURRENT_DATE - tc.deadline) as overdue_days
       FROM tax_calendar tc
       JOIN companies c ON c.id = tc.company_id
       WHERE tc.status = 'overdue'
-      ORDER BY tc.due_date ASC
+      ORDER BY tc.deadline ASC
     `);
 
     // Recent activity
@@ -60,8 +60,8 @@ router.get('/summary', async (req, res, next) => {
     // This month's pending
     const thisMonthPending = await pool.query(`
       SELECT COUNT(*) as cnt FROM tax_calendar
-      WHERE status = 'pending' AND EXTRACT(MONTH FROM due_date) = EXTRACT(MONTH FROM CURRENT_DATE)
-        AND EXTRACT(YEAR FROM due_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+      WHERE status = 'pending' AND EXTRACT(MONTH FROM deadline) = EXTRACT(MONTH FROM CURRENT_DATE)
+        AND EXTRACT(YEAR FROM deadline) = EXTRACT(YEAR FROM CURRENT_DATE)
     `);
 
     // This month's filed
@@ -80,13 +80,13 @@ router.get('/summary', async (req, res, next) => {
       upcoming_deadlines: upcomingDeadlines.rows.map(r => ({
         company: r.company_name,
         tax_type: r.tax_type,
-        due_date: r.due_date,
-        due_in_days: r.due_date ? Math.ceil((new Date(r.due_date) - new Date()) / (1000 * 60 * 60 * 24)) : null,
+        due_date: r.deadline,
+        due_in_days: r.deadline ? Math.ceil((new Date(r.deadline) - new Date()) / (1000 * 60 * 60 * 24)) : null,
       })),
       overdue_items: overdueItems.rows.map(r => ({
         company: r.company_name,
         tax_type: r.tax_type,
-        due_date: r.due_date,
+        due_date: r.deadline,
         overdue_days: parseInt(r.overdue_days) || 0,
         estimated_penalty: Math.round((parseInt(r.overdue_days) || 0) * 100),
       })),
