@@ -12,6 +12,7 @@ const routes = [
   { path: '/vat-report', name: 'VatReport', component: () => import('../views/VatReport.vue') },
   { path: '/vat-details', name: 'VatDetails', component: () => import('../views/VatDetails.vue') },
   { path: '/vat-compliance', name: 'VatCompliance', component: () => import('../views/VatCompliance.vue') },
+  { path: '/vat-readiness', name: 'VatReadiness', component: () => import('../views/VatReadiness.vue') },
   { path: '/wht', name: 'WhtReport', component: () => import('../views/WhtReport.vue') },
   { path: '/invoice-gen', name: 'InvoiceGen', component: () => import('../views/InvoiceGen.vue') },
   { path: '/bank', name: 'BankTransactions', component: () => import('../views/BankTransactions.vue') },

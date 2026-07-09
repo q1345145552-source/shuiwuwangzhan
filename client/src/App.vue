@@ -25,6 +25,7 @@
           <el-menu-item index="/vat-report"><el-icon><Document /></el-icon> VAT 申报</el-menu-item>
           <el-menu-item index="/vat-details"><el-icon><List /></el-icon> VAT 明细</el-menu-item>
           <el-menu-item index="/vat-compliance"><el-icon><WarningFilled /></el-icon> VAT 合规检测</el-menu-item>
+          <el-menu-item index="/vat-readiness"><el-icon><CircleCheck /></el-icon> 报税准备</el-menu-item>
           <el-menu-item index="/wht"><el-icon><Collection /></el-icon> 预扣税申报</el-menu-item>
           <el-menu-item index="/invoice-gen"><el-icon><Tickets /></el-icon> 发票生成</el-menu-item>
           <el-menu-item index="/bank"><el-icon><CreditCard /></el-icon> 银行流水</el-menu-item>
@@ -156,7 +157,7 @@ const pageTitle = computed(() => {
     '/': '首页', '/companies': '客户公司管理', '/periods': '会计期间管理',
     '/ecommerce-sales': '电商销售录入', '/profit-loss': '利润表',
     '/vat-report': 'VAT 申报', '/vat-details': 'VAT 明细管理',
-    '/vat-compliance': 'VAT 合规检测', '/wht': '预扣税申报',
+    '/vat-readiness': 'VAT 报税准备中心', '/vat-compliance': 'VAT 合规检测', '/wht': '预扣税申报',
     '/invoice-gen': '发票生成', '/bank': '银行流水管理',
     '/expenses': '费用管理', '/cit': 'CIT 年度申报',
     '/export-monthly': '月度报表导出', '/compliance': '合规预警日历',

@@ -457,6 +457,146 @@ router.get('/vat-report/source-trace', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ==================== VAT 报税准备度检查 ====================
+router.get('/vat-report/readiness', async (req, res, next) => {
+  try {
+    const { company_id, period_id } = req.query;
+    if (!company_id || !period_id) return res.status(400).json({ error: '缺少 company_id 或 period_id' });
+
+    const checks = [];
+    let totalPoints = 0, earnedPoints = 0;
+
+    // Helper
+    const chk = (id, label, status, message, action_link) => {
+      const weight = 10;
+      totalPoints += weight;
+      const score = status === 'pass' ? weight : status === 'warn' ? Math.round(weight * 0.5) : 0;
+      earnedPoints += score;
+      checks.push({ id, label, status, message, score, max: weight, action_link: action_link || '' });
+    };
+
+    // ① 客户公司
+    const comp = await pool.query('SELECT id FROM companies WHERE id=$1', [company_id]);
+    chk('company', '客户公司', comp.rows.length > 0 ? 'pass' : 'fail',
+      comp.rows.length > 0 ? '已选择客户公司' : '未找到客户公司', '/companies');
+
+    // ② 会计期间
+    const period = await pool.query('SELECT id, status FROM accounting_periods WHERE id=$1', [period_id]);
+    const perExists = period.rows.length > 0;
+    chk('period', '会计期间', perExists ? 'pass' : 'fail',
+      perExists ? '会计期间已创建' : '会计期间不存在', '/periods');
+
+    // ③ 电商销售数据
+    const sales = await pool.query('SELECT COUNT(*) as cnt, COALESCE(SUM(platform_sales),0) as total FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
+    const hasSales = parseInt(sales.rows[0].cnt) > 0;
+    chk('sales', '电商销售录入', hasSales ? 'pass' : 'warn',
+      hasSales ? '本期间共 ' + sales.rows[0].cnt + ' 条销售记录，销售额 ' + r2(sales.rows[0].total) + ' THB' : '本期间无销售数据',
+      '/ecommerce-sales');
+
+    // ④ 平台导入
+    const platImports = await pool.query(
+      "SELECT platform, COUNT(*) as cnt FROM platform_imports WHERE company_id=$1 AND period_id=$2 AND status='completed' GROUP BY platform",
+      [company_id, period_id]
+    );
+    const importedPlatforms = new Set(platImports.rows.map(r => r.platform));
+    const allPlatforms = ['shopee','lazada','tiktok'];
+    const missingPlatforms = allPlatforms.filter(p => !importedPlatforms.has(p));
+    const platStatus = missingPlatforms.length === 0 ? 'pass' : missingPlatforms.length < allPlatforms.length ? 'warn' : 'warn';
+    const platMsg = platImports.rows.length > 0
+      ? '已导入: ' + platImports.rows.map(r => r.platform + '(' + r.cnt + '批)').join('、')
+      : '尚未导入任何平台数据';
+    if (missingPlatforms.length > 0) chk('platform_import', '平台导入(Shopee/Lazada/TikTok)', 'warn',
+      platMsg + '。缺少: ' + missingPlatforms.join('、'), '/platform-import');
+    else chk('platform_import', '平台导入(Shopee/Lazada/TikTok)', 'pass', platMsg, '/platform-import');
+
+    // ⑤ VAT 已计算
+    const vat = await pool.query('SELECT vat_sales, vat_purchases, vat_payable FROM vat_reports vr JOIN accounting_periods ap ON ap.id=vr.period_id WHERE vr.company_id=$1 AND ap.id=$2', [company_id, period_id]);
+    const hasVat = vat.rows.length > 0 && (parseFloat(vat.rows[0].vat_sales) > 0 || parseFloat(vat.rows[0].vat_purchases) > 0);
+    if (hasVat) {
+      chk('vat_calculated', 'VAT 数据', 'pass',
+        'VAT 已计算: 销项 ' + r2(vat.rows[0].vat_sales) + ' / 进项 ' + r2(vat.rows[0].vat_purchases), '/vat-report');
+    } else {
+      // Fallback: check from ecommerce
+      const ecVat = await pool.query('SELECT COALESCE(SUM(vat_sales_calculated),0) as vs, COALESCE(SUM(vat_purchases_calculated),0) as vp FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
+      const hasEcVat = parseFloat(ecVat.rows[0].vs) > 0 || parseFloat(ecVat.rows[0].vp) > 0;
+      chk('vat_calculated', 'VAT 数据', hasEcVat ? 'pass' : 'warn',
+        hasEcVat ? 'VAT 通过电商销售自动估算: 销项 ' + r2(ecVat.rows[0].vs) : 'VAT 数据尚未计算', '/vat-report');
+    }
+
+    // ⑥ 销项VAT来源
+    const outDetail = await pool.query('SELECT COUNT(*) as cnt FROM vat_output_details WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
+    const hasOutDetail = parseInt(outDetail.rows[0].cnt) > 0;
+    chk('output_source', '销项 VAT 来源', hasOutDetail || hasSales ? 'pass' : 'warn',
+      hasOutDetail ? '已在 VAT 明细中录入 ' + outDetail.rows[0].cnt + ' 条' : hasSales ? '来源为电商销售估算（建议补充 VAT 明细）' : '无销项 VAT 来源',
+      '/vat-report');
+
+    // ⑦ 进项VAT来源
+    const inDetail = await pool.query("SELECT COUNT(*) as cnt FROM vat_input_details WHERE company_id=$1 AND period_id=$2", [company_id, period_id]);
+    const expCount = await pool.query("SELECT COUNT(*) as cnt FROM expense_details WHERE company_id=$1 AND period_id=$2 AND vat_amount > 0", [company_id, period_id]);
+    const hasInSource = parseInt(inDetail.rows[0].cnt) > 0 || parseInt(expCount.rows[0].cnt) > 0;
+    chk('input_source', '进项 VAT 来源', hasInSource ? 'pass' : 'warn',
+      hasInSource ? '有可抵扣进项来源' : '无进项 VAT 来源（费用或进口 VAT）',
+      '/expenses');
+
+    // ⑧ 费用管理
+    const expenses = await pool.query('SELECT COUNT(*) as cnt, COALESCE(SUM(total_amount),0) as total FROM expense_details WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
+    const hasExpenses = parseInt(expenses.rows[0].cnt) > 0;
+    chk('expenses', '费用管理', hasExpenses ? 'pass' : 'warn',
+      hasExpenses ? '已录入 ' + expenses.rows[0].cnt + ' 条费用' : '本期间无费用记录', '/expenses');
+
+    // ⑨ 银行流水
+    const bank = await pool.query('SELECT COUNT(*) as cnt FROM bank_transactions WHERE company_id=$1 AND period_id=$2', [company_id, period_id]);
+    const hasBank = parseInt(bank.rows[0].cnt) > 0;
+    chk('bank', '银行流水', hasBank ? 'pass' : 'warn',
+      hasBank ? '已导入 ' + bank.rows[0].cnt + ' 条银行交易' : '本期间无银行流水', '/bank');
+
+    // ⑩ 数据校验
+    const dupCheck = await pool.query(
+      `SELECT order_no, COUNT(*) as cnt FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2 AND order_no IS NOT NULL AND trim(order_no) != '' GROUP BY order_no HAVING COUNT(*) > 1`,
+      [company_id, period_id]
+    );
+    const negCheck = await pool.query(
+      'SELECT COUNT(*) as cnt FROM ecommerce_sales WHERE company_id=$1 AND period_id=$2 AND platform_sales < 0',
+      [company_id, period_id]
+    );
+    const hasDups = parseInt(dupCheck.rows.length || 0) > 0;
+    const hasNeg = parseInt(negCheck.rows[0]?.cnt || 0) > 0;
+    const validPass = !hasDups && !hasNeg;
+    const validMsg = [];
+    if (hasDups) validMsg.push('发现重复订单号');
+    if (hasNeg) validMsg.push('发现负销售额');
+    chk('data_valid', '数据校验', validPass ? 'pass' : 'fail',
+      validPass ? '未发现异常数据' : validMsg.join('；'), '/data-validator');
+
+    // 额外：期间锁定状态
+    if (perExists && period.rows[0].status === 'locked') {
+      checks.push({
+        id: 'period_locked', label: '期间锁定', status: 'pass', message: '该期间已锁定，VAT 不可修改',
+        score: 0, max: 0, action_link: ''
+      });
+    }
+
+    const readiness = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0;
+    const filingStatus = readiness >= 90 ? 'ready' : readiness >= 60 ? 'review' : 'not_ready';
+
+    res.json({
+      company_id: parseInt(company_id),
+      period_id: parseInt(period_id),
+      readiness,
+      filing_status: filingStatus,
+      filing_status_label: filingStatus === 'ready' ? '可以申报' : filingStatus === 'review' ? '建议检查' : '暂不能申报',
+      checks,
+      summary: {
+        total: checks.filter(c => c.max > 0).length,
+        passed: checks.filter(c => c.status === 'pass' && c.max > 0).length,
+        warned: checks.filter(c => c.status === 'warn' && c.max > 0).length,
+        failed: checks.filter(c => c.status === 'fail' && c.max > 0).length,
+        pending: checks.filter(c => c.status === 'warn' || c.status === 'fail').filter(c => c.max > 0).map(c => c.label),
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 // ==================== 资产负债表 ====================
 router.get('/balance-sheet', async (req, res, next) => {
   try {
